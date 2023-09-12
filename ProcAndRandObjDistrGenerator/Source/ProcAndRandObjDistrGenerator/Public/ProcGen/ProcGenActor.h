@@ -44,6 +44,30 @@ struct SProcessScopeExec
 	bool* bVarPtr;
 };
 
+struct FInstMeshCellInfo
+{
+	class UHierarchicalInstancedStaticMeshComponent* InstancedStaticMeshComponentPtr;
+	int32 InstanceCreateCounter;
+	bool bNeedTreeRebuild;
+
+	FInstMeshCellInfo()
+	{
+		InstancedStaticMeshComponentPtr = nullptr;
+		InstanceCreateCounter = 0;
+		bNeedTreeRebuild = false;
+	}
+};
+
+struct FInstMeshCellsData
+{
+	TMap<int32, FInstMeshCellInfo> CellsInfo;
+
+	FInstMeshCellsData() : CellsInfo()
+	{
+
+	}
+};
+
 UCLASS()
 class AProcGenActor : public AActor
 {
@@ -71,7 +95,7 @@ public:
 	virtual void Tick(float DeltaTime) override;
 
 	TArray<FVector> GetSplinePointsForShapeTriagulation();
-	TArray<FVector> GetSplinePointsForShapeTriagulationWithoutOffset();
+	TArray<FVector> GetSplinePointsForShapeTriagulationWithoutOffset(bool bSupportNonClosedShape = false);
 	TArray<FVector> GetSplinePointsForGenOnSpline();
 	TArray<FTransform> GetSplineTransformsForGenOnSpline();
 
@@ -79,6 +103,16 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = Generation)
 	void TestBuildPolyShapeToGen();
+
+	UFUNCTION(BlueprintCallable, Category = Generation)
+	float GetDistanceToShapeEdgeFromPoint(const FVector& Point, bool b2D);
+
+	UFUNCTION(BlueprintCallable, Category = Generation)
+	float GetPercentDistanceToShapeEdgeFromPointToShapeCenter(const FVector& Point, bool b2D);
+	UFUNCTION(BlueprintCallable, Category = Generation)
+	float GetPercentDistanceToSplineNearestCenterFromPoint(const FVector& Point, bool b2D);
+	UFUNCTION(BlueprintCallable, Category = Generation)
+	float GetDistanceToExcludedShapes(const FVector& PointPos);
 
 	UFUNCTION(BlueprintCallable, CallInEditor, Category = Generation)
 	void GenerateRequest();
@@ -106,13 +140,19 @@ public:
 	UFUNCTION()
 	void OnLinkedActorDestroyed(AActor* DestroyedActor);
 
-	void CreateNewSMComponent(class UStaticMesh* pSM, FTransform& SMTrasf, struct FStaticMeshCollisionSetup* StaticMeshCollisionSetupPtr = nullptr, struct FStaticMeshRenderingOverrideSetup* StaticMeshRenderingOverrideSetupPtr = nullptr);
+	class UStaticMeshComponent* CreateNewSMComponent(class UStaticMesh* pSM, const FTransform& SMTrasf, struct FStaticMeshCollisionSetup* StaticMeshCollisionSetupPtr = nullptr, struct FStaticMeshRenderingOverrideSetup* StaticMeshRenderingOverrideSetupPtr = nullptr, bool bIsSimple = false);
 
-	void CreateNewDecalComponent(class UMaterialInterface* DecalMaterial, FTransform& DecalTrasf, const FVector& DecalScale);
+	void RemoveSMComp(class UStaticMeshComponent* pStaticMeshComponent);
+
+	class UDecalComponent* CreateNewDecalComponent(class UMaterialInterface* DecalMaterial, const FTransform& DecalTrasf, const FVector& DecalScale);
 
 	void ClearAttachedSMs();
 
 	void ClearAttachedDecals();
+
+	int32 CreateNewInstancedSMInst(class UStaticMesh* pSM, FTransform& SMTrasf, int32 ParentGridCellId = -1);
+	bool RemoveInstancedSMInstById(class UStaticMesh* pSM, int32 Id, int32 ParentGridCellId = -1);
+	void ClearInstancedSMsAndInsts();
 
 	void PaintBySphere(const FVector& SpherePos, float SphereSize);
 
@@ -191,9 +231,26 @@ landscape and will be assigned to each landscape virtual cell when process decid
 /** Option for use GenerationDirectionAlignmentArrow component of this ProcGenActor to set rotation alignment direction for generated objects */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = GenerationDirection)
 	bool bUseGenerationAlignDirectionAC;
+/** Already calculated spline shape center (same for closed spline shape and opened spline shape) */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = GenerationPreCalculatedVars)
+	FVector GenShapeCenterPoint;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = GridGeneration)
+	TArray<int32> LinkedGenSlotsUIDs;
 
 	bool bIsProcess;
 
 	TArray<class UStaticMeshComponent*> GeneratedStaticMeshComponents;
 	TArray<class UDecalComponent*> GeneratedDecalsComponents;
+
+	FBox ShapeBoundingBox;
+
+	TMap<class UStaticMesh*, class UInstancedStaticMeshComponent*> InstancedStaticMeshComponentsMap;
+	TMap<class UStaticMesh*, FInstMeshCellsData> InstancedStaticMeshComponentsMap2;
+
+	float TreeBuildRecool = 0.0f;
+	bool bNeedTreeRebuild = false;
+
+	int32 CachedParentGridCellId = -1;
+
+	FInstMeshCellInfo* CachedInstMeshCellInfoPointer = nullptr;
 };

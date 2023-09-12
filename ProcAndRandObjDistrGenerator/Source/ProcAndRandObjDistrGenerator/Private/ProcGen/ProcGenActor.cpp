@@ -19,6 +19,11 @@
 
 #include "Components/ArrowComponent.h"
 
+#include "Misc/ScopedSlowTask.h"
+
+static FTransform ZeroTrasf = FTransform();
+static bool bInitOnceN600 = false;
+
 AProcGenActor::AProcGenActor() : Super(), 
 ProcGenSlotObjectClass(), 
 CurCreatedProcGenSlotObject(), 
@@ -26,7 +31,11 @@ GeneratedStaticMeshComponents(),
 GeneratedDecalsComponents(),
 OthersPGAsUsedAsExcludedShapes(),
 OthersPGAsUsedAsTIA(),
-ShapeLimitActors()
+ShapeLimitActors(),
+ShapeBoundingBox(EForceInit::ForceInit),
+LinkedGenSlotsUIDs(),
+InstancedStaticMeshComponentsMap(),
+InstancedStaticMeshComponentsMap2()
 {
 	PrimaryActorTick.bCanEverTick = false;
 
@@ -62,6 +71,15 @@ ShapeLimitActors()
 	bUseSplineControlPointsOnlyToGenShape = false;
 	bUseGenerationDirectionAC = false;
 	bUseGenerationAlignDirectionAC = false;
+
+	GenShapeCenterPoint = FVector::ZeroVector;
+
+	if (!bInitOnceN600)
+	{
+		ZeroTrasf.SetLocation(FVector(0, 0, -5000000));
+		ZeroTrasf.RemoveScaling(0);
+		bInitOnceN600 = true;
+	}
 }
 
 void AProcGenActor::BeginPlay()
@@ -95,12 +113,20 @@ void AProcGenActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	UProcGenManager* pProcGenManager = UProcGenManager::GetCurManager();
 	if (pProcGenManager)
 	{
+		for (int32 Id : LinkedGenSlotsUIDs)
+		{
+			pProcGenManager->ClearGenerationGridCellsByGenSlotId(Id);
+		}
+		LinkedGenSlotsUIDs.Empty();
+
 		int32 ids = pProcGenManager->ProcGenActorsPtrs.Find(this);
 		if (ids > -1)
 		{
 			pProcGenManager->ProcGenActorsPtrs.RemoveAt(ids);
 		}
 	}
+
+	ClearInstancedSMsAndInsts();
 }
 
 void AProcGenActor::OnConstruction(const FTransform& Transform)
@@ -112,11 +138,75 @@ void AProcGenActor::OnConstruction(const FTransform& Transform)
 	{
 		pProcGenManager->ProcGenActorsPtrs.AddUnique(this);
 	}
+
+	TArray<FVector> PointsArr = GetSplinePointsForShapeTriagulationWithoutOffset(true);
+	if (PointsArr.Num() >= 2)
+	{
+		FVector Center = FVector::ZeroVector;
+		for (FVector& CurPoint : PointsArr)
+		{
+			Center += (CurPoint * 0.001f);
+		}
+		Center = (Center / PointsArr.Num()) * 1000.0f;
+		GenShapeCenterPoint = Center;
+	}
+	else
+	{
+		GenShapeCenterPoint = GetActorLocation();
+	}
+
+	ShapeBoundingBox = FBox(PointsArr);
 }
 
 void AProcGenActor::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+
+	if (InstancedStaticMeshComponentsMap.Num() > 0)
+	{
+		for (TPair<UStaticMesh*, UInstancedStaticMeshComponent*>& InstCompData : InstancedStaticMeshComponentsMap)
+		{
+			UHierarchicalInstancedStaticMeshComponent* pMC = Cast<UHierarchicalInstancedStaticMeshComponent>(InstCompData.Value);
+			if (pMC)
+			{
+				if (TreeBuildRecool <= 0.0f)
+				{
+					if (pMC->IsTreeFullyBuilt() || bNeedTreeRebuild)
+					{
+						pMC->BuildTreeIfOutdated(true, false);
+						TreeBuildRecool = FMath::RandRange(1.5f, 4.0f);
+						bNeedTreeRebuild = false;
+					}
+				}
+
+			}
+		}
+	}
+
+	if (TreeBuildRecool <= 0.0f)
+	{
+		for (TPair<UStaticMesh*, FInstMeshCellsData>& InstCompData : InstancedStaticMeshComponentsMap2)
+		{
+			for (TPair<int32, FInstMeshCellInfo>& CellData : InstCompData.Value.CellsInfo)
+			{
+				if (CellData.Value.InstancedStaticMeshComponentPtr)
+				{
+					if (CellData.Value.bNeedTreeRebuild)
+					{
+						CellData.Value.bNeedTreeRebuild = false;
+						CellData.Value.InstancedStaticMeshComponentPtr->BuildTreeIfOutdated(true, false);
+					}
+				}
+			}
+		}
+
+		TreeBuildRecool = FMath::RandRange(0.2f, 0.6f);
+	}
+
+	if (TreeBuildRecool > 0.0f)
+	{
+		TreeBuildRecool -= DeltaTime;
+	}
 }
 
 TArray<FVector> AProcGenActor::GetSplinePointsForShapeTriagulation()
@@ -158,13 +248,49 @@ TArray<FVector> AProcGenActor::GetSplinePointsForShapeTriagulation()
 	return PointsArr;
 }
 
-TArray<FVector> AProcGenActor::GetSplinePointsForShapeTriagulationWithoutOffset()
+TArray<FVector> AProcGenActor::GetSplinePointsForShapeTriagulationWithoutOffset(bool bSupportNonClosedShape)
 {
 	FVector SplinePoint;
 	TArray<FVector> PointsArr = TArray<FVector>();
 	if (!GenerationSplineShape->IsClosedLoop())
 	{
-		return PointsArr;
+		if (!bSupportNonClosedShape)
+		{
+			return PointsArr;
+		}
+		else
+		{
+			if (bUseSplineControlPointsOnlyToGenShape)
+			{
+				if (GenerationSplineShape->GetNumberOfSplinePoints() < 2)
+					return PointsArr;
+
+				for (int32 i = 0; i < GenerationSplineShape->GetNumberOfSplinePoints(); ++i)
+				{
+					SplinePoint = GenerationSplineShape->GetLocationAtSplinePoint(i, ESplineCoordinateSpace::World);
+					PointsArr.Add(SplinePoint);
+				}
+				return PointsArr;
+			}
+			int32 numPoints = int32(GenerationSplineShape->GetSplineLength() / SplineDivideDistanceForTriangulation);
+			if (numPoints < 2)
+			{
+				return PointsArr;
+			}
+
+			float totalDist = 0.0f;
+			for (int32 i = 0; i < numPoints; ++i)
+			{
+				SplinePoint = GenerationSplineShape->GetLocationAtDistanceAlongSpline(totalDist, ESplineCoordinateSpace::World);
+				PointsArr.Add(SplinePoint);
+				totalDist += SplineDivideDistanceForTriangulation;
+			}
+
+			SplinePoint = GenerationSplineShape->GetLocationAtDistanceAlongSpline(GenerationSplineShape->GetSplineLength(), ESplineCoordinateSpace::World);
+			PointsArr.Add(SplinePoint);
+
+			return PointsArr;
+		}
 	}
 	if (bUseSplineControlPointsOnlyToGenShape)
 	{
@@ -357,7 +483,12 @@ void AProcGenActor::FillExludePolys(TArray<FPoly>& PolysArr)
 
 void AProcGenActor::TestBuildPolyShapeToGen()
 {
-	UWorld* pCurEdWorld = GEditor->GetEditorWorldContext().World();
+	UWorld* pCurEdWorld = nullptr;//GEditor->GetEditorWorldContext().World();
+	UProcGenManager* pPGManager = UProcGenManager::GetCurManager();
+	if (pPGManager)
+	{
+		pCurEdWorld = pPGManager->GetWorldPRFEditor();
+	}
 
 	if (bGenerationOnSpline)
 	{
@@ -441,6 +572,89 @@ void AProcGenActor::TestBuildPolyShapeToGen()
 	}
 }
 
+float AProcGenActor::GetDistanceToShapeEdgeFromPoint(const FVector& Point, bool b2D)
+{
+	FVector NearestSplinePoint = GenerationSplineShape->FindLocationClosestToWorldLocation(Point, ESplineCoordinateSpace::World);
+	if (b2D)
+	{
+		NearestSplinePoint.Z = Point.Z;
+	}
+	if (bGenerationOnSpline)
+	{
+		FVector DirToEdge = Point - NearestSplinePoint;
+		DirToEdge.Normalize();
+		NearestSplinePoint = NearestSplinePoint + (DirToEdge * SplineGenThickness);
+	}
+	return FVector::Dist(Point, NearestSplinePoint);
+}
+
+float AProcGenActor::GetPercentDistanceToShapeEdgeFromPointToShapeCenter(const FVector& Point, bool b2D)
+{
+	FVector NearestSplinePoint = GenerationSplineShape->FindLocationClosestToWorldLocation(Point, ESplineCoordinateSpace::World);
+	FVector Center = GenShapeCenterPoint;
+	if (b2D)
+	{
+		NearestSplinePoint.Z = Point.Z;
+		Center.Z = Point.Z;
+	}
+	float distToCenter = FVector::Dist(Center, NearestSplinePoint);
+	float distToPoint = FVector::Dist(Point, NearestSplinePoint);
+	if (!bGenerationOnSpline)
+	{
+		return distToPoint / distToCenter;
+	}
+	else
+	{
+		return distToPoint / SplineGenThickness;
+	}
+}
+
+float AProcGenActor::GetPercentDistanceToSplineNearestCenterFromPoint(const FVector& Point, bool b2D)
+{
+	if (SplineGenThickness == 0.0f)
+		return 0.0f;
+
+	FVector NearestSplinePoint = GenerationSplineShape->FindLocationClosestToWorldLocation(Point, ESplineCoordinateSpace::World);
+	if (b2D)
+	{
+		NearestSplinePoint.Z = Point.Z;
+	}
+	float distToPoint = FVector::Dist(Point, NearestSplinePoint);
+	return distToPoint / SplineGenThickness;
+}
+
+float AProcGenActor::GetDistanceToExcludedShapes(const FVector& PointPos)
+{
+	TArray<float> ArrValues = TArray<float>();
+	for (AProcGenActor* OthersPGA_Ptr : OthersPGAsUsedAsExcludedShapes)
+	{
+		if (!OthersPGA_Ptr)
+			continue;
+
+		float distTo = OthersPGA_Ptr->GetDistanceToShapeEdgeFromPoint(PointPos, true);
+		if ((distTo / 500.0f) <= 1.0f)
+		{
+			ArrValues.Add(distTo);
+		}
+	}
+
+	if (ArrValues.Num() > 1)
+	{
+		ArrValues.Sort([](const float Left, const float Right) -> bool
+			{
+				return Left > Right;
+			});
+
+		return ArrValues.Last();
+	}
+	else if (ArrValues.Num() > 0)
+	{
+		return ArrValues[0];
+	}
+
+	return 10000.0f;
+}
+
 void AProcGenActor::GenerateRequest()
 {
 	if (!ProcGenSlotObjectClass.Get())
@@ -473,6 +687,18 @@ void AProcGenActor::GenerateRequest()
 	ClearAttachedSMs();
 	ClearAttachedDecals();
 
+	UProcGenManager* pProcGenManager = UProcGenManager::GetCurManager();
+	if (pProcGenManager)
+	{
+		for (int32 Id : LinkedGenSlotsUIDs)
+		{
+			pProcGenManager->ClearGenerationGridCellsByGenSlotId(Id);
+		}
+		LinkedGenSlotsUIDs.Empty();
+
+		pProcGenManager->ClearGeneratorsCache();
+	}
+
 	CurCreatedProcGenSlotObject.Get()->PrepareToGeneration();
 
 	if (bGenerateOnTargetLandscape && TargetLandscapePtr)
@@ -481,7 +707,12 @@ void AProcGenActor::GenerateRequest()
 		return;
 	}
 
-	UWorld* pCurEdWorld = GEditor->GetEditorWorldContext().World();
+	UWorld* pCurEdWorld = nullptr;// GEditor->GetEditorWorldContext().World();
+	UProcGenManager* pPGManager = UProcGenManager::GetCurManager();
+	if (pPGManager)
+	{
+		pCurEdWorld = pPGManager->GetWorldPRFEditor();
+	}
 	TArray<FPoly> ExcludedPls = TArray<FPoly>();
 	FillExludePolys(ExcludedPls);
 
@@ -491,6 +722,10 @@ void AProcGenActor::GenerateRequest()
 		if (TransfPointsArr.Num() <= 0)
 			return;
 
+		FString STaskMsgTextStr = "";
+		FScopedSlowTask GSTTargetSpline(100.0f, FText::FromString("Procedural Generation On Spline started"));
+		GSTTargetSpline.MakeDialog();
+
 		FTransform SplineTransCur;
 		FTransform SplineTransNext;
 		FVector PolyBoxBorder[4];
@@ -498,6 +733,11 @@ void AProcGenActor::GenerateRequest()
 		{
 			if ((i + 1) < TransfPointsArr.Num())
 			{
+				STaskMsgTextStr = FString::Printf(TEXT("Left spline Segments to generate - %i"), TransfPointsArr.Num() - i);
+				GSTTargetSpline.CurrentFrameScope = 0.0f;
+				GSTTargetSpline.CompletedWork = (float(i) / float(TransfPointsArr.Num())) * 100.0f;
+				GSTTargetSpline.EnterProgressFrame(0.0f, FText::FromString(STaskMsgTextStr));
+
 				SplineTransCur = TransfPointsArr[i];
 				SplineTransNext = TransfPointsArr[i + 1];
 				PolyBoxBorder[0] = SplineTransCur.GetLocation() + ((SplineTransCur.GetRotation() * FVector(0, 1, 0)) * SplineGenThickness);
@@ -588,6 +828,7 @@ void AProcGenActor::GenerateRequest()
 
 void AProcGenActor::ClearPreviousRequest()
 {
+	UProcGenManager* pProcGenManager = UProcGenManager::GetCurManager();
 	if (CurCreatedProcGenSlotObject.Get())
 	{
 		SProcessScopeExec ProcessScopeObj(bIsProcess);
@@ -602,11 +843,41 @@ void AProcGenActor::ClearPreviousRequest()
 
 		ClearAttachedSMs();
 		ClearAttachedDecals();
+		if (pProcGenManager)
+		{
+			for (int32 Id : LinkedGenSlotsUIDs)
+			{
+				pProcGenManager->ClearGenerationGridCellsByGenSlotId(Id);
+			}
+			LinkedGenSlotsUIDs.Empty();
+
+			pProcGenManager->ClearGeneratorsCache();
+		}
+
+		ClearInstancedSMsAndInsts();
 	}
+	else
+	{
+		if (pProcGenManager)
+		{
+			for (int32 Id : LinkedGenSlotsUIDs)
+			{
+				pProcGenManager->ClearGenerationGridCellsByGenSlotId(Id);
+			}
+			LinkedGenSlotsUIDs.Empty();
+
+			pProcGenManager->ClearGeneratorsCache();
+		}
+
+		ClearInstancedSMsAndInsts();
+	}
+
 }
 
 void AProcGenActor::ClearAttachedProceduralComponentsRequest()
 {
+	ClearInstancedSMsAndInsts();
+
 	GeneratedDecalsComponents.Empty();
 	GeneratedStaticMeshComponents.Empty();
 
@@ -689,7 +960,14 @@ void AProcGenActor::DrawGenerationDebugInfo()
 	if (!GEditor)
 		return;
 
-	UWorld* pCurEdWorld = GEditor->GetEditorWorldContext().World();
+	UWorld* pCurEdWorld = nullptr;// GEditor->GetEditorWorldContext().World();
+	UProcGenManager* pPGManager = UProcGenManager::GetCurManager();
+	if (pPGManager)
+	{
+		pCurEdWorld = pPGManager->GetWorldPRFEditor();
+	}
+
+	UKismetSystemLibrary::DrawDebugSphere(pCurEdWorld, GenShapeCenterPoint, 200.0f, 12, FLinearColor::Yellow, 15.0f, 2.0f);
 
 	if (bGenerationOnSpline)
 	{
@@ -948,6 +1226,12 @@ void AProcGenActor::GenerateOnTargetLandscape()
 	float BoxSizeBB = 1.0f;
 	FVector CellCoords;
 	float ZExt = GenerationZExtent * 0.01f;
+
+	FString STaskMsgTextStr = "";//FString::Printf(TEXT("Generate On Target Landscape started"));
+	FScopedSlowTask GSTTargetLandscape(100.0f, FText::FromString("Procedural Generation On Target Landscape started"));
+
+	GSTTargetLandscape.MakeDialog();
+
 	if (LandscapeGenerationMask)
 	{
 		TArray<FLinearColor> ColorArr = TArray<FLinearColor>();
@@ -979,13 +1263,25 @@ void AProcGenActor::GenerateOnTargetLandscape()
 		FLinearColor LColor;
 		if (ColorArr.Num() < int32(TextureHeight * TextureWidth))
 		{
+			FMessageDialog::Open(EAppMsgType::Ok, FText::FromString("Generation interrupted! Generation ERROR C3"));
 			return;
 		}
-
+		uint32 NextSegmentNum = 0;
+		uint32 NextSegmentIter = 0;
 		for (uint32 y = 0; y < TextureHeight; ++y)
 		{
 			for (uint32 x = 0; x < TextureWidth; ++x)
 			{
+				if (NextSegmentNum >= NextSegmentIter)
+				{
+					NextSegmentNum += 128;
+					STaskMsgTextStr = FString::Printf(TEXT("Left landscape Segments to generate - %i"), ColorArr.Num() - NextSegmentIter);
+					GSTTargetLandscape.CurrentFrameScope = 0.0f;
+					GSTTargetLandscape.CompletedWork = ((float(NextSegmentIter) / float(ColorArr.Num())) * 90.0f) + 10.0f;
+					GSTTargetLandscape.EnterProgressFrame(0.0f, FText::FromString(STaskMsgTextStr));
+				}
+				++NextSegmentIter;
+
 				MeshPoints.Empty();
 
 				LColor = ColorArr[(y * TextureWidth) + x];
@@ -1023,11 +1319,29 @@ void AProcGenActor::GenerateOnTargetLandscape()
 	}
 	else
 	{
+		uint32 NextSegmentNum = 0;
+		uint32 NextSegmentIter = 0;
 		//FVector CellCoords;
 		for (int32 y = 0; y < MaxY; ++y)
 		{
 			for (int32 x = 0; x < MaxX; ++x)
 			{
+				if (NextSegmentNum >= NextSegmentIter)
+				{
+					NextSegmentNum += 128;
+					STaskMsgTextStr = FString::Printf(TEXT("Left landscape Segments to generate(WO LandscapeGenerationMask) - %i"), uint32(MaxX + MaxY) - NextSegmentIter);
+					GSTTargetLandscape.CurrentFrameScope = 0.0f;
+					GSTTargetLandscape.CompletedWork = ((float(NextSegmentIter) / float(uint32(MaxX + MaxY))) * 90.0f) + 10.0f;
+					GSTTargetLandscape.EnterProgressFrame(0.0f, FText::FromString(STaskMsgTextStr));
+				}
+				++NextSegmentIter;
+
+				if (uint32(MaxX + MaxY) < (NextSegmentIter + 128))
+				{
+					//infinite loop detected
+					break;
+				}
+
 				MeshPoints.Empty();
 
 				CellCoords.X = x;
@@ -1079,11 +1393,41 @@ void AProcGenActor::OnLinkedActorDestroyed(AActor* DestroyedActor)
 		}
 	}
 }
+static FName NoCollisionProf(TEXT("NoCollision"));
 
-void AProcGenActor::CreateNewSMComponent(UStaticMesh* pSM, FTransform& SMTrasf, FStaticMeshCollisionSetup* StaticMeshCollisionSetupPtr, FStaticMeshRenderingOverrideSetup* StaticMeshRenderingOverrideSetupPtr)
+UStaticMeshComponent* AProcGenActor::CreateNewSMComponent(UStaticMesh* pSM, const FTransform& SMTrasf, FStaticMeshCollisionSetup* StaticMeshCollisionSetupPtr, FStaticMeshRenderingOverrideSetup* StaticMeshRenderingOverrideSetupPtr, bool bIsSimple)
 {
 	if (!pSM)
-		return;
+		return nullptr;
+
+	if (bIsSimple)
+	{
+		//UInstancedStaticMeshComponent::AddInstanceInternal()
+		//UInstancedStaticMeshComponent::AddInstance()
+		//UInstancedStaticMeshComponent::RemoveInstance()
+		//UInstancedStaticMeshComponent::GetInstanceCount()
+		//UInstancedStaticMeshComponent::SetStaticMesh(pSM)
+		UStaticMeshComponent* StaticMeshComponent = NewObject<UStaticMeshComponent>(this, NAME_None, RF_Transient);
+		StaticMeshComponent->Mobility = EComponentMobility::Static;
+		StaticMeshComponent->bSelectable = false;
+		StaticMeshComponent->bHasPerInstanceHitProxies = false;
+		StaticMeshComponent->bAffectDistanceFieldLighting = false;
+		StaticMeshComponent->SetCollisionProfileName(NoCollisionProf);
+		StaticMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);//bDisableCollision = true;
+		StaticMeshComponent->SetCanEverAffectNavigation(false);
+
+		StaticMeshComponent->SetStaticMesh(pSM);
+
+		StaticMeshComponent->RegisterComponent();
+		StaticMeshComponent->AttachToComponent(GenerationSplineShape, FAttachmentTransformRules::KeepRelativeTransform);
+		StaticMeshComponent->SetWorldTransform(SMTrasf);
+		
+		//StaticMeshComponent->SetVisibility(true);
+		//StaticMeshComponent->SetWorldTransform(SMTrasf);
+		//StaticMeshComponent->GetDistanceToCollision()
+		GeneratedStaticMeshComponents.Add(StaticMeshComponent);
+		return StaticMeshComponent;
+	}
 
 	//UStaticMeshComponent* NewStaticMeshComponent = ConstructObject<UStaticMeshComponent>(UStaticMeshComponent::StaticClass(), GetOwner(), NAME_None, RF_Transient);
 	UStaticMeshComponent* StaticMeshComponent = NewObject<UStaticMeshComponent>(this, NAME_None/*FName(TEXT("123"))*/, RF_Transactional);//ConstructObject<UStaticMeshComponent>(UStaticMeshComponent::StaticClass(), this, FName(TEXT("123")));//NewObject<UStaticMeshComponent>(this, NAME_None, RF_Transactional);
@@ -1112,10 +1456,26 @@ void AProcGenActor::CreateNewSMComponent(UStaticMesh* pSM, FTransform& SMTrasf, 
 			StaticMeshComponent->MinLOD = StaticMeshRenderingOverrideSetupPtr->OverrideMinimalLOD;
 		}
 	}
+
 	//UKismetSystemLibrary::DrawDebugLine(GetWorld(), GetActorLocation(), GetActorLocation() + FVector(FMath::RandRange(-1000.0f, 1000.0f), FMath::RandRange(-1000.0f, 1000.0f), 10000), FLinearColor::Green, 15.3f);
+	return StaticMeshComponent;
 }
 
-void AProcGenActor::CreateNewDecalComponent(UMaterialInterface* DecalMaterial, FTransform& DecalTrasf, const FVector& DecalScale)
+void AProcGenActor::RemoveSMComp(UStaticMeshComponent* pStaticMeshComponent)
+{
+	GeneratedStaticMeshComponents.RemoveSwap(pStaticMeshComponent);
+
+	if (pStaticMeshComponent)
+	{
+		RemoveInstanceComponent(pStaticMeshComponent);
+		pStaticMeshComponent->DetachFromParent();
+		pStaticMeshComponent->UnregisterComponent();
+		pStaticMeshComponent->RemoveFromRoot();
+		pStaticMeshComponent->ConditionalBeginDestroy();
+	}
+}
+
+UDecalComponent* AProcGenActor::CreateNewDecalComponent(UMaterialInterface* DecalMaterial, const FTransform& DecalTrasf, const FVector& DecalScale)
 {
 	UDecalComponent* pDecalComponent = NewObject<UDecalComponent>(this, NAME_None, RF_Transactional);
 	pDecalComponent->RegisterComponent();
@@ -1134,16 +1494,25 @@ void AProcGenActor::CreateNewDecalComponent(UMaterialInterface* DecalMaterial, F
 	pDecalComponent->SetWorldTransform(DecalTrasf);
 	pDecalComponent->SetRelativeRotation(pDecalComponent->GetRelativeRotation() + FRotator(-90, 0, 0));
 	GeneratedDecalsComponents.Add(pDecalComponent);
+
+	return pDecalComponent;
 }
 
 void AProcGenActor::ClearAttachedSMs()
 {
+	UProcGenManager* pProcGenManager = UProcGenManager::GetCurManager();
 	if (GeneratedStaticMeshComponents.Num() > 0)
 	{
 		for (UStaticMeshComponent* StaticMeshComponent : GeneratedStaticMeshComponents)
 		{
 			if (StaticMeshComponent)
 			{
+				//temp--------------------------------------------------------------------------------------------------------
+				/*if (pProcGenManager)
+				{
+					pProcGenManager->ClearGenerationGridCellsByLocation(StaticMeshComponent->GetComponentLocation());
+				}*/
+				//--------------------------------------------------------------------------------------------------------------
 				StaticMeshComponent->DetachFromParent();
 				StaticMeshComponent->UnregisterComponent();
 				StaticMeshComponent->RemoveFromRoot();
@@ -1174,6 +1543,250 @@ void AProcGenActor::ClearAttachedDecals()
 	}
 }
 
+static int32 currentInstanceCounter = 0;
+static int32 ReservedInstancesNum = 200000;
+
+//static int32 CachedParentGridCellId = -1;
+
+//static FInstMeshCellInfo* CachedInstMeshCellInfoPointer = nullptr;
+
+
+
+int32 AProcGenActor::CreateNewInstancedSMInst(UStaticMesh* pSM, FTransform& SMTrasf, int32 ParentGridCellId)
+{
+	if (!pSM)
+		return -1;
+
+	if (ParentGridCellId > -1)
+	{
+		bool bCachedPGCIdMatch = CachedParentGridCellId == ParentGridCellId && CachedInstMeshCellInfoPointer != nullptr;
+
+		FInstMeshCellsData& InstMeshCellsData = InstancedStaticMeshComponentsMap2.FindOrAdd(pSM);
+		FInstMeshCellInfo& InstMeshCellInfo = bCachedPGCIdMatch ? *CachedInstMeshCellInfoPointer : InstMeshCellsData.CellsInfo.FindOrAdd(ParentGridCellId);
+		if (!InstMeshCellInfo.InstancedStaticMeshComponentPtr)
+		{
+			UHierarchicalInstancedStaticMeshComponent* StaticMeshComponent = NewObject<UHierarchicalInstancedStaticMeshComponent>(this, NAME_None, RF_Transient);
+			StaticMeshComponent->Mobility = EComponentMobility::Static;
+			StaticMeshComponent->bSelectable = false;
+			StaticMeshComponent->bHasPerInstanceHitProxies = false;
+			StaticMeshComponent->bAffectDistanceFieldLighting = false;
+			StaticMeshComponent->SetCollisionProfileName(NoCollisionProf);
+			StaticMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);//bDisableCollision = true;
+			StaticMeshComponent->SetCanEverAffectNavigation(false);
+			StaticMeshComponent->bAutoRebuildTreeOnInstanceChanges = false;
+			StaticMeshComponent->SetStaticMesh(pSM);
+			StaticMeshComponent->bDisableCollision = true;
+
+			StaticMeshComponent->SetLODDataCount(pSM->GetNumLODs(), pSM->GetNumLODs());
+			StaticMeshComponent->SetCullDistances(3500.0f, 20000.0f);
+			StaticMeshComponent->CachedMaxDrawDistance = 22500.0f;
+			
+			StaticMeshComponent->RegisterComponent();
+			StaticMeshComponent->AttachToComponent(GenerationSplineShape, FAttachmentTransformRules::KeepRelativeTransform);
+			InstMeshCellInfo.InstancedStaticMeshComponentPtr = StaticMeshComponent;
+
+			/*FTransform ZeroTrasf = FTransform();
+			ZeroTrasf.SetLocation(FVector(0, 0, -5000000));
+			ZeroTrasf.RemoveScaling(0);
+			for (int32 i = 0; i < ReservedInstancesNum; ++i)
+			{
+				InstMeshCellInfo.InstancedStaticMeshComponentPtr->AddInstance(ZeroTrasf);
+			}*/
+		}
+
+		if (InstMeshCellInfo.InstancedStaticMeshComponentPtr)
+		{
+			//InstMeshCellInfo.InstancedStaticMeshComponentPtr->UpdateInstanceTransform(InstMeshCellInfo.InstanceCreateCounter, SMTrasf, true/*, true, true*/);
+			int32 instanceId = InstMeshCellInfo.InstancedStaticMeshComponentPtr->AddInstance(ZeroTrasf);
+			InstMeshCellInfo.InstancedStaticMeshComponentPtr->UpdateInstanceTransform(instanceId, SMTrasf, true/*, true, true*/);
+			int32 oldIc = InstMeshCellInfo.InstanceCreateCounter;
+			++InstMeshCellInfo.InstanceCreateCounter;
+			if (InstMeshCellInfo.InstanceCreateCounter >= ReservedInstancesNum)
+			{
+				InstMeshCellInfo.InstanceCreateCounter = 0;
+			}
+			InstMeshCellInfo.bNeedTreeRebuild = true;
+
+			CachedParentGridCellId = ParentGridCellId;
+			CachedInstMeshCellInfoPointer = &InstMeshCellInfo;
+			return oldIc;
+		}
+		return -1;
+	}
+
+	UInstancedStaticMeshComponent*& InstancedStaticMeshComponent = InstancedStaticMeshComponentsMap.FindOrAdd(pSM);
+	if (InstancedStaticMeshComponent == nullptr)
+	{
+		//UHierarchicalInstancedStaticMeshComponent::ActualInstancesPerLeaf()
+		//UInstancedStaticMeshComponent* StaticMeshComponent = NewObject<UInstancedStaticMeshComponent>(this, NAME_None, RF_Transient);
+		UHierarchicalInstancedStaticMeshComponent* StaticMeshComponent = NewObject<UHierarchicalInstancedStaticMeshComponent>(this, NAME_None, RF_Transient);
+		StaticMeshComponent->Mobility = EComponentMobility::Static;
+		StaticMeshComponent->bSelectable = false;
+		StaticMeshComponent->bHasPerInstanceHitProxies = false;
+		StaticMeshComponent->bAffectDistanceFieldLighting = false;
+		StaticMeshComponent->SetCollisionProfileName(NoCollisionProf);
+		StaticMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);//bDisableCollision = true;
+		StaticMeshComponent->SetCanEverAffectNavigation(false);
+		StaticMeshComponent->bAutoRebuildTreeOnInstanceChanges = false;
+		StaticMeshComponent->SetStaticMesh(pSM);
+		StaticMeshComponent->bDisableCollision = true;
+
+		StaticMeshComponent->SetLODDataCount(pSM->GetNumLODs(), pSM->GetNumLODs());
+		StaticMeshComponent->SetCullDistances(3500.0f, 20000.0f);
+
+		StaticMeshComponent->RegisterComponent();
+		StaticMeshComponent->AttachToComponent(GenerationSplineShape, FAttachmentTransformRules::KeepRelativeTransform);
+		InstancedStaticMeshComponent = Cast<UInstancedStaticMeshComponent>(StaticMeshComponent);
+		//test
+		if (InstancedStaticMeshComponent)
+		{
+			/*FTransform ZeroTrasf = FTransform();
+			ZeroTrasf.SetLocation(FVector(0, 0, -5000000));
+			ZeroTrasf.RemoveScaling(0);*/
+			for (int32 i = 0; i < ReservedInstancesNum; ++i)
+			{
+				InstancedStaticMeshComponent->AddInstance(ZeroTrasf);
+			}
+			//StaticMeshComponent->BuildTreeIfOutdated(true, true);
+		}
+	}
+
+	if (InstancedStaticMeshComponent != nullptr)
+	{
+		//InstancedStaticMeshComponent->GetInstanceTransform()
+		InstancedStaticMeshComponent->UpdateInstanceTransform(currentInstanceCounter, SMTrasf, true/*, true, true*/);
+		int32 oldIc = currentInstanceCounter;
+		++currentInstanceCounter;
+		if (currentInstanceCounter >= ReservedInstancesNum)
+		{
+			currentInstanceCounter = 0;
+		}
+		/*UHierarchicalInstancedStaticMeshComponent* pMC = Cast<UHierarchicalInstancedStaticMeshComponent>(InstancedStaticMeshComponent);
+		if (pMC)
+		{
+			pMC->BuildTreeIfOutdated(true, false);
+		}*/
+		//currentInstanceCounter = FMath::Clamp(currentInstanceCounter, 0, 5000000 - 1);
+		bNeedTreeRebuild = true;
+		return oldIc;
+		//return InstancedStaticMeshComponent->AddInstance(SMTrasf);
+	}
+	return -1;
+}
+
+
+
+bool AProcGenActor::RemoveInstancedSMInstById(UStaticMesh* pSM, int32 Id, int32 ParentGridCellId)
+{
+	if (ParentGridCellId > -1)
+	{
+		bool bCachedPGCIdMatch = CachedParentGridCellId == ParentGridCellId && CachedInstMeshCellInfoPointer != nullptr;
+
+		FInstMeshCellsData& InstMeshCellsData = InstancedStaticMeshComponentsMap2.FindOrAdd(pSM);
+		FInstMeshCellInfo& InstMeshCellInfo = bCachedPGCIdMatch ? *CachedInstMeshCellInfoPointer : InstMeshCellsData.CellsInfo.FindOrAdd(ParentGridCellId);
+		if (!InstMeshCellInfo.InstancedStaticMeshComponentPtr)
+		{
+
+		}
+
+		if (InstMeshCellInfo.InstancedStaticMeshComponentPtr)
+		{
+			/*FTransform ZeroTrasf = FTransform();
+			ZeroTrasf.SetLocation(FVector(0, 0, -5000000));
+			ZeroTrasf.RemoveScaling(0);
+			InstMeshCellInfo.InstancedStaticMeshComponentPtr->UpdateInstanceTransform(InstMeshCellInfo.InstanceCreateCounter, ZeroTrasf, true/ *, true, true* /);*/
+			--InstMeshCellInfo.InstanceCreateCounter;
+			if (InstMeshCellInfo.InstanceCreateCounter < 0)
+			{
+				InstMeshCellInfo.InstanceCreateCounter = 0;
+			}
+			InstMeshCellInfo.InstancedStaticMeshComponentPtr->RemoveInstance(InstMeshCellInfo.InstanceCreateCounter);
+			InstMeshCellInfo.bNeedTreeRebuild = true;
+			
+			if (InstMeshCellInfo.InstanceCreateCounter < 0)
+			{
+				if (InstMeshCellInfo.InstancedStaticMeshComponentPtr->GetInstanceCount() <= 0)
+				{
+					/*InstMeshCellInfo.InstancedStaticMeshComponentPtr->DetachFromParent();
+					InstMeshCellInfo.InstancedStaticMeshComponentPtr->UnregisterComponent();
+					InstMeshCellInfo.InstancedStaticMeshComponentPtr->RemoveFromRoot();
+					InstMeshCellInfo.InstancedStaticMeshComponentPtr->ConditionalBeginDestroy();
+					InstMeshCellInfo.InstancedStaticMeshComponentPtr = nullptr;*/
+				}
+				else
+				{
+
+				}
+				InstMeshCellInfo.InstanceCreateCounter = 0;
+			}
+		}
+
+		CachedParentGridCellId = ParentGridCellId;
+		CachedInstMeshCellInfoPointer = &InstMeshCellInfo;
+
+		return true;
+	}
+	UInstancedStaticMeshComponent*& InstancedStaticMeshComponent = InstancedStaticMeshComponentsMap.FindOrAdd(pSM);
+	if (InstancedStaticMeshComponent != nullptr)
+	{
+		bool bRemoved = true;//InstancedStaticMeshComponent->RemoveInstance(Id);
+
+		/*FTransform ZeroTrasf = FTransform();
+		ZeroTrasf.SetLocation(FVector(0, 0, -5000000));
+		ZeroTrasf.RemoveScaling(0);*/
+		InstancedStaticMeshComponent->UpdateInstanceTransform(Id, ZeroTrasf, true, true, true);
+		bNeedTreeRebuild = true;
+		if (InstancedStaticMeshComponent->GetInstanceCount() <= 0)
+		{
+			InstancedStaticMeshComponent->DetachFromParent();
+			InstancedStaticMeshComponent->UnregisterComponent();
+			InstancedStaticMeshComponent->RemoveFromRoot();
+			InstancedStaticMeshComponent->ConditionalBeginDestroy();
+			InstancedStaticMeshComponent = nullptr;
+		}
+		return bRemoved;
+	}
+	return false;
+}
+
+void AProcGenActor::ClearInstancedSMsAndInsts()
+{
+	for (TPair<UStaticMesh*, UInstancedStaticMeshComponent*>& InstCompData : InstancedStaticMeshComponentsMap)
+	{
+		if (InstCompData.Value)
+		{
+			InstCompData.Value->ClearInstances();
+			InstCompData.Value->DetachFromParent();
+			InstCompData.Value->UnregisterComponent();
+			InstCompData.Value->RemoveFromRoot();
+			InstCompData.Value->ConditionalBeginDestroy();
+		}
+	}
+
+	InstancedStaticMeshComponentsMap.Empty();
+
+	for (TPair<UStaticMesh*, FInstMeshCellsData>& InstCompData : InstancedStaticMeshComponentsMap2)
+	{
+		for (TPair<int32, FInstMeshCellInfo>& CellData : InstCompData.Value.CellsInfo)
+		{
+			if (CellData.Value.InstancedStaticMeshComponentPtr)
+			{
+				CellData.Value.InstancedStaticMeshComponentPtr->ClearInstances();
+				CellData.Value.InstancedStaticMeshComponentPtr->DetachFromParent();
+				CellData.Value.InstancedStaticMeshComponentPtr->UnregisterComponent();
+				CellData.Value.InstancedStaticMeshComponentPtr->RemoveFromRoot();
+				CellData.Value.InstancedStaticMeshComponentPtr->ConditionalBeginDestroy();
+				CellData.Value.InstancedStaticMeshComponentPtr = nullptr;
+			}
+		}
+	}
+
+	InstancedStaticMeshComponentsMap2.Empty();
+
+	CachedParentGridCellId = -1;
+	CachedInstMeshCellInfoPointer = nullptr;
+}
+
 void AProcGenActor::PaintBySphere(const FVector& SpherePos, float SphereSize)
 {
 	if (!CurCreatedProcGenSlotObject.Get())
@@ -1187,7 +1800,12 @@ void AProcGenActor::PaintBySphere(const FVector& SpherePos, float SphereSize)
 		return;
 	}
 
-	UWorld* pCurEdWorld = GEditor->GetEditorWorldContext().World();
+	UWorld* pCurEdWorld = nullptr;//GEditor->GetEditorWorldContext().World();
+	UProcGenManager* pPGManager = UProcGenManager::GetCurManager();
+	if (pPGManager)
+	{
+		pCurEdWorld = pPGManager->GetWorldPRFEditor();
+	}
 
 	TArray<FVector> MeshPoints = TArray<FVector>();
 	float cp_coof = 15.0f / SphereSize;
