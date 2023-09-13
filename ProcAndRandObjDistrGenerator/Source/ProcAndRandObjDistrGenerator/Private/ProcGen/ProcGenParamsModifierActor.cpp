@@ -340,3 +340,92 @@ bool AProcGenParamsModifierActor::IsPointInsideShape2D(const FVector& Point)
 	FVector AdditivePos = FVector(0, 0, 10000000);
 	return UPGSObj::LinePolyIntersection(SplineShapeTriangles, Point + AdditivePos, Point - AdditivePos);
 }
+
+void AProcGenParamsModifierActor::RefineShapeData()
+{
+	USplineComponent* SplineShapeComponent = FindComponentByClass<USplineComponent>();
+	AreaSplineShape = SplineShapeComponent;
+
+	TArray<FVector> PointsArr = GetSplinePointsForShapeTriagulationWithoutOffset();
+	if (bUseSplineShapeForAreaDefinition && PointsArr.Num() >= 2)
+	{
+		FVector Center = FVector::ZeroVector;
+		for (FVector& CurPoint : PointsArr)
+		{
+			Center += (CurPoint * 0.001f);
+		}
+		Center = (Center / PointsArr.Num()) * 1000.0f;
+		ShapeCenterPoint = Center;
+		TArray<FVector> PointsArr2 = PointsArr;
+		PointsArr2.Add(ShapeCenterPoint + FVector(0, 0, 50000));
+		PointsArr2.Add(ShapeCenterPoint + FVector(0, 0, -50000));
+
+		ShapeBoundingBox = FBox(PointsArr2);
+	}
+	else
+	{
+		ShapeCenterPoint = GetActorLocation();
+		PointsArr.Empty();
+		PointsArr.Add(ShapeCenterPoint + (FVector(0, 0, 1) * ModifierAreaRadius));
+		PointsArr.Add(ShapeCenterPoint + (FVector(0, 0, -1) * ModifierAreaRadius));
+		PointsArr.Add(ShapeCenterPoint + (FVector(0, 1, 0) * ModifierAreaRadius));
+		PointsArr.Add(ShapeCenterPoint + (FVector(0, -1, 0) * ModifierAreaRadius));
+		PointsArr.Add(ShapeCenterPoint + (FVector(1, 0, 0) * ModifierAreaRadius));
+		PointsArr.Add(ShapeCenterPoint + (FVector(-1, 0, 0) * ModifierAreaRadius));
+
+		ShapeBoundingBox = FBox(PointsArr);
+
+		PointsArr.Empty();
+	}
+
+	UProcGenManager* pProcGenManager = UProcGenManager::GetCurManager();
+	if (pProcGenManager)
+	{
+		pProcGenManager->ProcGenParamsModifierActorsPtrs.AddUnique(this);
+	}
+
+	SplineShapeTriangles.Empty();
+
+	FPoly PolyShapeNv = FPoly();
+	PolyShapeNv.Init();
+
+	if (bUseSplineShapeForAreaDefinition && PointsArr.Num() >= 2)
+	{
+		for (int32 i = 0; i < PointsArr.Num(); ++i)
+		{
+			PolyShapeNv.InsertVertex(i, PointsArr[i]);
+		}
+		PolyShapeNv.Fix();
+		PolyShapeNv.Triangulate(nullptr, SplineShapeTriangles);
+	}
+	else
+	{
+		float cp_coof = SplineDivideDistanceForTriangulation / ModifierAreaRadius;
+		if (cp_coof > 0.25f)
+			cp_coof = 0.25f;//four points minimum
+
+		int32 numPoints = int32(1.0f / cp_coof);
+		FVector fwdTargetVector = GetActorForwardVector();
+		FVector ToPointDirVector = FVector(0);
+		FVector ZAng = FVector(0);
+		FQuat rot_z = FQuat::Identity;
+		FVector xDir = FVector(1, 0, 0);
+		FVector xPos = GetActorLocation();
+		for (int32 i = 0; i < numPoints; ++i)
+		{
+			ZAng = FVector(0, 0, (cp_coof * i) * 360.0f);
+			rot_z = FQuat::MakeFromEuler(ZAng);
+			xDir = FVector(1, 0, 0);
+			xDir = rot_z * xDir;
+			xDir.Normalize();
+			xPos = GetActorLocation() + (xDir * ModifierAreaRadius);
+			PolyShapeNv.InsertVertex(i, xPos);
+		}
+		PolyShapeNv.Triangulate(nullptr, SplineShapeTriangles);
+	}
+}
+
+void AProcGenParamsModifierActor::RequestRerunCS()
+{
+	RerunConstructionScripts();
+}

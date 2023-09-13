@@ -253,4 +253,5 @@ landscape and will be assigned to each landscape virtual cell when process decid
 	int32 CachedParentGridCellId = -1;
 
 	FInstMeshCellInfo* CachedInstMeshCellInfoPointer = nullptr;
+	class UStaticMesh* LastSMPtr = nullptr;
 };

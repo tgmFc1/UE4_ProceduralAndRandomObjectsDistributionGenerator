@@ -80,6 +80,11 @@ InstancedStaticMeshComponentsMap2()
 		ZeroTrasf.RemoveScaling(0);
 		bInitOnceN600 = true;
 	}
+
+	CachedParentGridCellId = -1;
+
+	CachedInstMeshCellInfoPointer = nullptr;
+	LastSMPtr = nullptr;
 }
 
 void AProcGenActor::BeginPlay()
@@ -1559,7 +1564,7 @@ int32 AProcGenActor::CreateNewInstancedSMInst(UStaticMesh* pSM, FTransform& SMTr
 
 	if (ParentGridCellId > -1)
 	{
-		bool bCachedPGCIdMatch = CachedParentGridCellId == ParentGridCellId && CachedInstMeshCellInfoPointer != nullptr;
+		bool bCachedPGCIdMatch = CachedParentGridCellId == ParentGridCellId && CachedInstMeshCellInfoPointer != nullptr && LastSMPtr == pSM;
 
 		FInstMeshCellsData& InstMeshCellsData = InstancedStaticMeshComponentsMap2.FindOrAdd(pSM);
 		FInstMeshCellInfo& InstMeshCellInfo = bCachedPGCIdMatch ? *CachedInstMeshCellInfoPointer : InstMeshCellsData.CellsInfo.FindOrAdd(ParentGridCellId);
@@ -1609,6 +1614,7 @@ int32 AProcGenActor::CreateNewInstancedSMInst(UStaticMesh* pSM, FTransform& SMTr
 
 			CachedParentGridCellId = ParentGridCellId;
 			CachedInstMeshCellInfoPointer = &InstMeshCellInfo;
+			LastSMPtr = pSM;
 			return oldIc;
 		}
 		return -1;
@@ -1680,7 +1686,7 @@ bool AProcGenActor::RemoveInstancedSMInstById(UStaticMesh* pSM, int32 Id, int32 
 {
 	if (ParentGridCellId > -1)
 	{
-		bool bCachedPGCIdMatch = CachedParentGridCellId == ParentGridCellId && CachedInstMeshCellInfoPointer != nullptr;
+		bool bCachedPGCIdMatch = CachedParentGridCellId == ParentGridCellId && CachedInstMeshCellInfoPointer != nullptr && LastSMPtr == pSM;
 
 		FInstMeshCellsData& InstMeshCellsData = InstancedStaticMeshComponentsMap2.FindOrAdd(pSM);
 		FInstMeshCellInfo& InstMeshCellInfo = bCachedPGCIdMatch ? *CachedInstMeshCellInfoPointer : InstMeshCellsData.CellsInfo.FindOrAdd(ParentGridCellId);
@@ -1723,6 +1729,7 @@ bool AProcGenActor::RemoveInstancedSMInstById(UStaticMesh* pSM, int32 Id, int32 
 
 		CachedParentGridCellId = ParentGridCellId;
 		CachedInstMeshCellInfoPointer = &InstMeshCellInfo;
+		LastSMPtr = pSM;
 
 		return true;
 	}
@@ -1785,6 +1792,7 @@ void AProcGenActor::ClearInstancedSMsAndInsts()
 
 	CachedParentGridCellId = -1;
 	CachedInstMeshCellInfoPointer = nullptr;
+	LastSMPtr = nullptr;
 }
 
 void AProcGenActor::PaintBySphere(const FVector& SpherePos, float SphereSize)

@@ -95,6 +95,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = AreaShape)
 	bool IsPointInsideShape2D(const FVector& Point);
 
+	UFUNCTION(BlueprintCallable, Category = AreaShape)
+	void RefineShapeData();
+
+	UFUNCTION(BlueprintCallable, Category = Construction)
+	void RequestRerunCS();
+
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = AreaShape, meta = (AllowPrivateAccess = "true"))
 	class USplineComponent* AreaSplineShape;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = AreaShape)
