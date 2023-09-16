@@ -78,9 +78,26 @@ struct FStaticMeshRenderingOverrideSetup
 	FStaticMeshRenderingOverrideSetup()
 	{
 		OverrideMinimalLOD = -1;
+		DesiredDrawDistance = -1.0f;
 	}
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Params)
 	int32 OverrideMinimalLOD;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Params)
+	float DesiredDrawDistance;
+};
+
+USTRUCT(BlueprintType)
+struct FDecalRenderingOverrideSetup
+{
+	GENERATED_USTRUCT_BODY()
+
+	FDecalRenderingOverrideSetup()
+	{
+		FadeScreenSize = -1.0f;
+	}
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Params)
+	float FadeScreenSize;
 };
 
 USTRUCT(BlueprintType)
@@ -109,7 +126,7 @@ struct FDecalTypeWithChanceTG
 {
 	GENERATED_USTRUCT_BODY()
 
-	FDecalTypeWithChanceTG() : DecalInitialScale(0)
+	FDecalTypeWithChanceTG() : DecalInitialScale(0), DecalRenderingOverrideSetup()
 	{
 		GenerationChance = 100.0f;
 		DecalMaterial = nullptr;
@@ -121,6 +138,8 @@ struct FDecalTypeWithChanceTG
 	class UMaterialInterface* DecalMaterial;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Params)
 	FVector DecalInitialScale;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Params)
+	FDecalRenderingOverrideSetup DecalRenderingOverrideSetup;
 };
 
 USTRUCT(BlueprintType)

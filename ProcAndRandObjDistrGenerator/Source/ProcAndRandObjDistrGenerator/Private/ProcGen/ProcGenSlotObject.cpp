@@ -2082,7 +2082,7 @@ void UPGSObj::RequestGenerateInBBoxWithShapeBorder(const TArray<FVector>& Genera
 					{
 						if (pParentProcGenActor)
 						{
-							pParentProcGenActor->CreateNewDecalComponent(pDecalTypeSetup->DecalMaterial, TempTransform, pDecalTypeSetup->DecalInitialScale);
+							pParentProcGenActor->CreateNewDecalComponent(pDecalTypeSetup->DecalMaterial, TempTransform, pDecalTypeSetup->DecalInitialScale, &pDecalTypeSetup->DecalRenderingOverrideSetup);
 						}
 					}
 				}
@@ -4235,7 +4235,7 @@ bool UPGSObj::GenerateObjectOnLevel(FProcGenSlotParams& PGSParams, const FTransf
 		{
 			if (pParentProcGenActor)
 			{
-				CreationResults.CreatedDecalComponentPtr = pParentProcGenActor->CreateNewDecalComponent(pDecalTypeSetup->DecalMaterial, TempTransform, pDecalTypeSetup->DecalInitialScale);
+				CreationResults.CreatedDecalComponentPtr = pParentProcGenActor->CreateNewDecalComponent(pDecalTypeSetup->DecalMaterial, TempTransform, pDecalTypeSetup->DecalInitialScale, &pDecalTypeSetup->DecalRenderingOverrideSetup);
 				bObjectCreated = true;
 			}
 		}

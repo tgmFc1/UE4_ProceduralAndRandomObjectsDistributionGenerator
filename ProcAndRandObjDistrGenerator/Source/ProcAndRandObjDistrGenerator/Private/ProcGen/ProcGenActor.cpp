@@ -1460,6 +1460,11 @@ UStaticMeshComponent* AProcGenActor::CreateNewSMComponent(UStaticMesh* pSM, cons
 			StaticMeshComponent->bOverrideMinLOD = true;
 			StaticMeshComponent->MinLOD = StaticMeshRenderingOverrideSetupPtr->OverrideMinimalLOD;
 		}
+
+		if (StaticMeshRenderingOverrideSetupPtr->DesiredDrawDistance > -1.0f)
+		{
+			StaticMeshComponent->LDMaxDrawDistance = StaticMeshRenderingOverrideSetupPtr->DesiredDrawDistance;
+		}
 	}
 
 	//UKismetSystemLibrary::DrawDebugLine(GetWorld(), GetActorLocation(), GetActorLocation() + FVector(FMath::RandRange(-1000.0f, 1000.0f), FMath::RandRange(-1000.0f, 1000.0f), 10000), FLinearColor::Green, 15.3f);
@@ -1480,7 +1485,7 @@ void AProcGenActor::RemoveSMComp(UStaticMeshComponent* pStaticMeshComponent)
 	}
 }
 
-UDecalComponent* AProcGenActor::CreateNewDecalComponent(UMaterialInterface* DecalMaterial, const FTransform& DecalTrasf, const FVector& DecalScale)
+UDecalComponent* AProcGenActor::CreateNewDecalComponent(UMaterialInterface* DecalMaterial, const FTransform& DecalTrasf, const FVector& DecalScale, FDecalRenderingOverrideSetup* DecalRenderingOverrideSetupPtr)
 {
 	UDecalComponent* pDecalComponent = NewObject<UDecalComponent>(this, NAME_None, RF_Transactional);
 	pDecalComponent->RegisterComponent();
@@ -1498,6 +1503,13 @@ UDecalComponent* AProcGenActor::CreateNewDecalComponent(UMaterialInterface* Deca
 	pDecalComponent->SetVisibility(true);
 	pDecalComponent->SetWorldTransform(DecalTrasf);
 	pDecalComponent->SetRelativeRotation(pDecalComponent->GetRelativeRotation() + FRotator(-90, 0, 0));
+
+	if (DecalRenderingOverrideSetupPtr)
+	{
+		if (DecalRenderingOverrideSetupPtr->FadeScreenSize > -1.0f)
+			pDecalComponent->FadeScreenSize = DecalRenderingOverrideSetupPtr->FadeScreenSize;
+	}
+
 	GeneratedDecalsComponents.Add(pDecalComponent);
 
 	return pDecalComponent;

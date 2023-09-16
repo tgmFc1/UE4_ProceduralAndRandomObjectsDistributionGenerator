@@ -144,7 +144,7 @@ public:
 
 	void RemoveSMComp(class UStaticMeshComponent* pStaticMeshComponent);
 
-	class UDecalComponent* CreateNewDecalComponent(class UMaterialInterface* DecalMaterial, const FTransform& DecalTrasf, const FVector& DecalScale);
+	class UDecalComponent* CreateNewDecalComponent(class UMaterialInterface* DecalMaterial, const FTransform& DecalTrasf, const FVector& DecalScale, struct FDecalRenderingOverrideSetup* DecalRenderingOverrideSetupPtr = nullptr);
 
 	void ClearAttachedSMs();
 
