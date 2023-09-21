@@ -159,8 +159,8 @@ public:
 };
 
 
-UCLASS(BlueprintType, Blueprintable, MinimalAPI)
-class UProcGenManager : public UObject, public FTickableGameObject
+UCLASS(BlueprintType, Blueprintable)
+class PROCANDRANDOBJDISTRGENERATOR_API UProcGenManager : public UObject, public FTickableGameObject
 {
 	//GENERATED_UCLASS_BODY()
 	GENERATED_BODY()

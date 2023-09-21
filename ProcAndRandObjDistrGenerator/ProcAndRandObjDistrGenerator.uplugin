@@ -16,8 +16,13 @@
 	"Modules": [
 		{
 			"Name": "ProcAndRandObjDistrGenerator",
-			"Type": "Editor",
+			"Type": "Runtime",
 			"LoadingPhase": "PreDefault"
+		},
+		{
+			"Name": "ProcAndRandObjDistrGenerator_Editor",
+			"Type": "Editor",
+			"LoadingPhase": "PostEngineInit"
 		}
 	]
 }

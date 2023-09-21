@@ -5,11 +5,11 @@
 #include "CoreMinimal.h"
 #include "Modules/ModuleManager.h"
 
-class FProcAndRandObjDistrGeneratorModule : public IModuleInterface
+class FProcAndRandObjDistrGenerator_Editor : public IModuleInterface
 {
 public:
 
-	FProcAndRandObjDistrGeneratorModule();
+	FProcAndRandObjDistrGenerator_Editor();
 	/** IModuleInterface implementation */
 	virtual void StartupModule() override;
 	virtual void ShutdownModule() override;

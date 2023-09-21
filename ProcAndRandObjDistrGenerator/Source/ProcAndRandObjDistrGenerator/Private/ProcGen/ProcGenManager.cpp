@@ -3,13 +3,15 @@
 #include "ProcGen/ProcGenManager.h"
 #include "..\..\Public\ProcGen\ProcGenManager.h"
 #include "Engine.h"
+#if WITH_EDITOR
 #include "Editor.h"
-#include "Engine/StaticMeshActor.h"
 #include "Landscape.h"
-#include "ProcAndRandObjDistrGenerator.h"
-#include "ProcGen/ProcGenSlotObject.h"
 #include "UnrealClient.h"
 #include "LevelEditorViewport.h"
+#endif
+#include "Engine/StaticMeshActor.h"
+#include "ProcAndRandObjDistrGenerator.h"
+#include "ProcGen/ProcGenSlotObject.h"
 #include "ProcGen/ProcGenParamsModifierActor.h"
 #include "ProcGen/ProcGenActor.h"
 //#include "..\..\Public\ProcGen\ProcGenSlotObject.h"
@@ -28,9 +30,6 @@ ArrGridCellsCurrentlyInactivePtrs(),
 CameraViewPosTL(),
 CurrentCameraViewPosTSVar()
 {
-	//FProcAndRandObjDistrGeneratorModule::SetProcGenManager(this);
-
-	//CurProcGenManager = this;
 
 	bPaintMode = false;
 	PaintSphereSize = 1000.0f;
@@ -156,8 +155,8 @@ void UProcGenManager::Tick(float DeltaTime)
 		TimeDelayBCreateNextPGActorsGroup += 0.15f;
 	}
 	FVector ViewLoc = FVector::ZeroVector;
-
-	if (!bPIESessionStarted)
+#if WITH_EDITOR
+	if (!bPIESessionStarted && GEditor)
 	{
 		if (bPaintMode && pCurEdWorld && GEditor && GEditor->GetActiveViewport())
 		{
@@ -178,10 +177,10 @@ void UProcGenManager::Tick(float DeltaTime)
 				}
 			}
 
-		if (ColPaintInNextFrame == false)
-		{
-			CurProcGenPaintMode = EProcGenPaintMode::Default;
-		}
+			if (ColPaintInNextFrame == false)
+			{
+				CurProcGenPaintMode = EProcGenPaintMode::Default;
+			}
 
 			if (ColPaintInNextFrame)
 			{
@@ -200,12 +199,15 @@ void UProcGenManager::Tick(float DeltaTime)
 	}
 	else
 	{
+#endif
 		if (pCurEdWorld && pCurEdWorld->GetFirstPlayerController() && pCurEdWorld->GetFirstPlayerController()->PlayerCameraManager)
 		{
 			//APlayerCameraManager* camManager = pCurEdWorld->GetFirstPlayerController()->PlayerCameraManager;
 			ViewLoc = pCurEdWorld->GetFirstPlayerController()->PlayerCameraManager->GetCameraLocation();
 		}
+#if WITH_EDITOR
 	}
+#endif
 
 	CurrentCameraViewPosTSVar.SetVar(ViewLoc);
 
@@ -253,7 +255,7 @@ void UProcGenManager::BeginDestroy()
 
 void UProcGenManager::RequestPaint(bool bPaintOrClearBrush)
 {
-	UWorld* pCurEdWorld = GetWorldPRFEditor();//GEditor->GetEditorWorldContext().World();
+	UWorld* pCurEdWorld = GetWorldPRFEditor();
 	ColPaintInNextFrame = true;
 	if (!bPaintOrClearBrush)
 	{
@@ -518,6 +520,7 @@ void UProcGenManager::CreateActorByParams(const FActorToDelayedCreateParams& Del
 {
 	if (DelayedCreateParams.bSpawnInEditor)
 	{
+#if WITH_EDITOR
 		AActor* pGeneratedActor = GEditor->AddActor(CurWorldPtr->GetCurrentLevel(), DelayedCreateParams.ActorClassPtr, DelayedCreateParams.ActorTransform, true);
 		if (pGeneratedActor)
 		{
@@ -540,6 +543,7 @@ void UProcGenManager::CreateActorByParams(const FActorToDelayedCreateParams& Del
 
 			
 		}
+#endif
 		//GEngine->AddOnScreenDebugMessage((uint64)-1, 8.0f, FColor::Green, FString::Printf(TEXT("UProcGenManager::CreateActorByParams pGeneratedActor name - %s"), *pGeneratedActor->GetName()));
 	}
 	else
@@ -547,8 +551,10 @@ void UProcGenManager::CreateActorByParams(const FActorToDelayedCreateParams& Del
 		FActorSpawnParameters SpawnInfo = FActorSpawnParameters();
 		SpawnInfo.OverrideLevel = CurWorldPtr->GetCurrentLevel();
 		SpawnInfo.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+#if WITH_EDITOR
 		SpawnInfo.bHideFromSceneOutliner = true;
 		SpawnInfo.bCreateActorPackage = true;
+#endif
 		SpawnInfo.ObjectFlags = RF_Transactional;
 		//SpawnInfo.ObjectFlags = RF_Transient | RF_WasLoaded | RF_Transactional | RF_Dynamic;
 		//SpawnInfo.bCreateActorPackage = true;
@@ -620,7 +626,7 @@ void UProcGenManager::AddProceduralTagToActor(AActor* pActor)
 
 void UProcGenManager::RemoveAllProcGeneratedActors()
 {
-	UWorld* pCurEdWorld = GetWorldPRFEditor();//GEditor->GetEditorWorldContext().World();
+	UWorld* pCurEdWorld = GetWorldPRFEditor();
 	if (!pCurEdWorld)
 		return;
 
@@ -857,8 +863,10 @@ void FGenerationInCellSlotData::LoadSlotData()
 			FActorSpawnParameters SpawnInfo = FActorSpawnParameters();
 			SpawnInfo.OverrideLevel = pPProcGenActor->GetWorld()->GetCurrentLevel();
 			SpawnInfo.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+#if WITH_EDITOR
 			SpawnInfo.bHideFromSceneOutliner = true;
 			SpawnInfo.bCreateActorPackage = true;
+#endif
 			SpawnInfo.ObjectFlags = RF_Transient;//RF_Transactional;
 
 			AActor* pGeneratedActor = pPProcGenActor->GetWorld()->SpawnActor(ActorToCreateClassPtr, &SlotTransf, SpawnInfo);
@@ -1022,10 +1030,11 @@ UWorld* UProcGenManager::GetWorldPRFEditor()
 	UWorld* pCurSelectedWorld = nullptr;
 	if (bPIESessionStarted)
 	{
-		pCurSelectedWorld = GetCurrentWorldStatic();//GEditor->GetEditorWorldContext().World();
+		pCurSelectedWorld = GetCurrentWorldStatic();
 	}
 	else
 	{
+#if WITH_EDITOR
 		if (GEditor)
 		{
 			pCurSelectedWorld = GEditor->GetEditorWorldContext().World();
@@ -1039,6 +1048,9 @@ UWorld* UProcGenManager::GetWorldPRFEditor()
 		{
 			pCurSelectedWorld = GetCurrentWorldStatic();
 		}
+#else
+		pCurSelectedWorld = GetCurrentWorldStatic();
+#endif
 	}
 
 	return pCurSelectedWorld;

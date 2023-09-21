@@ -6,7 +6,7 @@
 #include "..\..\Public\ProcGen\ProcGenActor.h"
 #include "Engine/Polys.h"
 #include "Engine.h"
-#include "Editor.h"
+//#include "Editor.h"
 #include "Engine/StaticMesh.h"
 #include "Components/StaticMeshComponent.h"
 #include "Runtime/Landscape/Classes/Landscape.h"
@@ -488,7 +488,7 @@ void AProcGenActor::FillExludePolys(TArray<FPoly>& PolysArr)
 
 void AProcGenActor::TestBuildPolyShapeToGen()
 {
-	UWorld* pCurEdWorld = nullptr;//GEditor->GetEditorWorldContext().World();
+	UWorld* pCurEdWorld = nullptr;
 	UProcGenManager* pPGManager = UProcGenManager::GetCurManager();
 	if (pPGManager)
 	{
@@ -665,6 +665,8 @@ void AProcGenActor::GenerateRequest()
 	if (!ProcGenSlotObjectClass.Get())
 		return;
 
+
+
 	SProcessScopeExec ProcessScopeObj(bIsProcess);
 
 	FVector GenDirDef = bUseGenerationDirectionAC ? GenerationDirectionArrowComp->GetComponentRotation().Vector() : FVector::ZeroVector;
@@ -712,7 +714,7 @@ void AProcGenActor::GenerateRequest()
 		return;
 	}
 
-	UWorld* pCurEdWorld = nullptr;// GEditor->GetEditorWorldContext().World();
+	UWorld* pCurEdWorld = nullptr;
 	UProcGenManager* pPGManager = UProcGenManager::GetCurManager();
 	if (pPGManager)
 	{
@@ -962,10 +964,12 @@ void AProcGenActor::StartTest1Request()
 
 void AProcGenActor::DrawGenerationDebugInfo()
 {
+#if WITH_EDITOR
 	if (!GEditor)
 		return;
+#endif
 
-	UWorld* pCurEdWorld = nullptr;// GEditor->GetEditorWorldContext().World();
+	UWorld* pCurEdWorld = nullptr;
 	UProcGenManager* pPGManager = UProcGenManager::GetCurManager();
 	if (pPGManager)
 	{
@@ -1195,6 +1199,7 @@ void AProcGenActor::ClearingProcGenActorsInRangeRequest()
 
 void AProcGenActor::GenerateOnTargetLandscape()
 {
+#if WITH_EDITOR
 	if (!TargetLandscapePtr)
 		return;
 
@@ -1378,6 +1383,7 @@ void AProcGenActor::GenerateOnTargetLandscape()
 			}
 		}
 	}
+#endif
 }
 
 void AProcGenActor::OnLinkedActorDestroyed(AActor* DestroyedActor)
@@ -1820,7 +1826,7 @@ void AProcGenActor::PaintBySphere(const FVector& SpherePos, float SphereSize)
 		return;
 	}
 
-	UWorld* pCurEdWorld = nullptr;//GEditor->GetEditorWorldContext().World();
+	UWorld* pCurEdWorld = nullptr;
 	UProcGenManager* pPGManager = UProcGenManager::GetCurManager();
 	if (pPGManager)
 	{

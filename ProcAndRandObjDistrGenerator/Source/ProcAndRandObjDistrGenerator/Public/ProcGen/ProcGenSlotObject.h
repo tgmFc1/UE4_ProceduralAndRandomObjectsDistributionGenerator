@@ -726,8 +726,8 @@ struct FObjectCreationResults
 	class UDecalComponent* CreatedDecalComponentPtr;
 };
 
-UCLASS(BlueprintType, Blueprintable, MinimalAPI)
-class UPGSObj : public UObject
+UCLASS(BlueprintType, Blueprintable)
+class PROCANDRANDOBJDISTRGENERATOR_API UPGSObj : public UObject
 {
 	//GENERATED_UCLASS_BODY()
 	GENERATED_BODY()

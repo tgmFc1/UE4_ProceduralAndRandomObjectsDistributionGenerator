@@ -64,7 +64,7 @@ struct FGenModifierSlotParams
 };
 
 UCLASS()
-class AProcGenParamsModifierActor : public AActor
+class PROCANDRANDOBJDISTRGENERATOR_API AProcGenParamsModifierActor : public AActor
 {
 	GENERATED_BODY()
 

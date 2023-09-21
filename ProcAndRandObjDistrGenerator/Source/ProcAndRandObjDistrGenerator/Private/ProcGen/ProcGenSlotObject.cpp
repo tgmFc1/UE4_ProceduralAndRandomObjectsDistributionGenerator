@@ -3,7 +3,9 @@
 #include "ProcGen/ProcGenSlotObject.h"
 #include "..\..\Public\ProcGen\ProcGenSlotObject.h"
 #include "Engine.h"
+#if WITH_EDITOR
 #include "Editor.h"
+#endif
 #include "Engine/StaticMeshActor.h"
 #include "Landscape.h"
 #include "ProcAndRandObjDistrGenerator.h"
@@ -416,7 +418,7 @@ void UPGSObj::RequestGenerateInBBox(const TArray<FVector>& GenerationBBoxPoints,
 				ProcGenSlot.TempTransformsForObjects.Add(TempTransform);
 				if (bDelayedGeneration)
 				{
-					UProcGenManager* pProcGenManager = UProcGenManager::GetCurManager();//FProcAndRandObjDistrGeneratorModule::GetProcGenManager();
+					UProcGenManager* pProcGenManager = UProcGenManager::GetCurManager();
 					if (pProcGenManager)
 					{
 						FActorToDelayedCreateParams ActorToDelayedCreateParams = FActorToDelayedCreateParams();
@@ -451,6 +453,7 @@ void UPGSObj::RequestGenerateInBBox(const TArray<FVector>& GenerationBBoxPoints,
 						ProcGenSlot.GeneratedActorsPtrs.Add(pGeneratedActor);
 					}
 				}
+#if WITH_EDITOR
 				else if(GEditor)
 				{
 					AActor* pGeneratedActor = GEditor->AddActor(pGenerationWorld->GetCurrentLevel(), pSelectedActorClass, TempTransform, true);
@@ -467,6 +470,7 @@ void UPGSObj::RequestGenerateInBBox(const TArray<FVector>& GenerationBBoxPoints,
 						//UKismetSystemLibrary::DrawDebugLine(pGenerationWorld, TempTransform.GetTranslation(), FVector(TempTransform.GetTranslation().X, TempTransform.GetTranslation().Y, 65535.0f), FLinearColor::Red, 15.3f);
 					}
 				}
+#endif
 			}
 		}
 	}
@@ -2147,8 +2151,10 @@ void UPGSObj::RequestGenerateInBBoxWithShapeBorder(const TArray<FVector>& Genera
 					FActorSpawnParameters SpawnInfo = FActorSpawnParameters();
 					SpawnInfo.OverrideLevel = pGenerationWorld->GetCurrentLevel();
 					SpawnInfo.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+#if WITH_EDITOR
 					SpawnInfo.bHideFromSceneOutliner = true;
 					SpawnInfo.bCreateActorPackage = true;
+#endif
 					SpawnInfo.ObjectFlags = RF_Transactional;
 					//SpawnInfo.bCreateActorPackage = true;
 					//SpawnInfo.ObjectFlags = InObjectFlags;
@@ -2167,6 +2173,7 @@ void UPGSObj::RequestGenerateInBBoxWithShapeBorder(const TArray<FVector>& Genera
 						}
 					}
 				}
+#if WITH_EDITOR
 				else if(GEditor)
 				{
 					AActor* pGeneratedActor = GEditor->AddActor(pGenerationWorld->GetCurrentLevel(), pSelectedActorClass, TempTransform, true);
@@ -2190,7 +2197,7 @@ void UPGSObj::RequestGenerateInBBoxWithShapeBorder(const TArray<FVector>& Genera
 						//UKismetSystemLibrary::DrawDebugLine(pGenerationWorld, TempTransform.GetTranslation(), FVector(TempTransform.GetTranslation().X, TempTransform.GetTranslation().Y, 65535.0f), FLinearColor::Red, 15.3f);
 					}
 				}
-
+#endif
 				//------Generate End
 			}
 		}
@@ -4297,8 +4304,10 @@ bool UPGSObj::GenerateObjectOnLevel(FProcGenSlotParams& PGSParams, const FTransf
 		FActorSpawnParameters SpawnInfo = FActorSpawnParameters();
 		SpawnInfo.OverrideLevel = pGenerationWorld->GetCurrentLevel();
 		SpawnInfo.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+#if WITH_EDITOR
 		SpawnInfo.bHideFromSceneOutliner = true;
 		SpawnInfo.bCreateActorPackage = true;
+#endif
 		SpawnInfo.ObjectFlags = RF_Transactional;
 		//SpawnInfo.bCreateActorPackage = true;
 		//SpawnInfo.ObjectFlags = InObjectFlags;
@@ -4320,6 +4329,7 @@ bool UPGSObj::GenerateObjectOnLevel(FProcGenSlotParams& PGSParams, const FTransf
 			bObjectCreated = true;
 		}
 	}
+#if WITH_EDITOR
 	else if (GEditor)
 	{
 		AActor* pGeneratedActor = GEditor->AddActor(pGenerationWorld->GetCurrentLevel(), pSelectedActorClass, TempTransform, true);
@@ -4345,6 +4355,7 @@ bool UPGSObj::GenerateObjectOnLevel(FProcGenSlotParams& PGSParams, const FTransf
 			bObjectCreated = true;
 		}
 	}
+#endif
 	return bObjectCreated;
 }
 

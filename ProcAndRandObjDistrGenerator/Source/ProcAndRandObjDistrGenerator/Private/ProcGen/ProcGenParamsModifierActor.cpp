@@ -6,7 +6,7 @@
 #include "..\..\Public\ProcGen\ProcGenParamsModifierActor.h"
 #include "Engine/Polys.h"
 #include "Engine.h"
-#include "Editor.h"
+//#include "Editor.h"
 #include "Engine/StaticMesh.h"
 #include "Components/StaticMeshComponent.h"
 #include "Runtime/Landscape/Classes/Landscape.h"

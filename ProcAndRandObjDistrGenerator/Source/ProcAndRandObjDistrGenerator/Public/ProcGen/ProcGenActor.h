@@ -69,7 +69,7 @@ struct FInstMeshCellsData
 };
 
 UCLASS()
-class AProcGenActor : public AActor
+class PROCANDRANDOBJDISTRGENERATOR_API AProcGenActor : public AActor
 {
 	GENERATED_BODY()
 

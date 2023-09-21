@@ -2,9 +2,9 @@
 
 using UnrealBuildTool;
 
-public class ProcAndRandObjDistrGenerator : ModuleRules
+public class ProcAndRandObjDistrGenerator_Editor : ModuleRules
 {
-	public ProcAndRandObjDistrGenerator(ReadOnlyTargetRules Target) : base(Target)
+	public ProcAndRandObjDistrGenerator_Editor(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 		
@@ -26,7 +26,8 @@ public class ProcAndRandObjDistrGenerator : ModuleRules
 			new string[]
 			{
 				"Core",
-                "CoreUObject"
+                "CoreUObject",
+				"ProcAndRandObjDistrGenerator"
 				// ... add other public dependencies that you statically link with here ...
 			}
 			);
@@ -38,26 +39,22 @@ public class ProcAndRandObjDistrGenerator : ModuleRules
                 "Core",
                 "CoreUObject",
 				"Engine",
-				//"Slate",
-				//"SlateCore",
+				"Slate",
+				"SlateCore",
 				"InputCore",
-				//"UnrealEd",
-				//"LevelEditor",
+				"UnrealEd",
+				"LevelEditor",
 				"Landscape",
 				"Foliage",
-                "PhysicsCore"
-                //"PropertyEditor"
+                "PhysicsCore",
+                "PropertyEditor",
+                "ProcAndRandObjDistrGenerator"
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);
-
-        if (Target.bBuildEditor)
-        {
-            PrivateDependencyModuleNames.Add("UnrealEd");
-        }
-
-
-        DynamicallyLoadedModuleNames.AddRange(
+		
+		
+		DynamicallyLoadedModuleNames.AddRange(
 			new string[]
 			{
 				// ... add any modules that your module loads dynamically here ...
