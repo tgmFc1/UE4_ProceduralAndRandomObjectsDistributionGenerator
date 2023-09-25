@@ -4,6 +4,7 @@
 + ***Link to download compiled version*** - https://drive.google.com/file/d/1oKJxO1bQQiJp7lV-29jYkuHwkZQbhyNh/view?usp=drive_link
 + ***Link to documentation*** - https://drive.google.com/file/d/1BAg9BXK0jFfdDS1_Xk9CuigE8RvquTyN/view?usp=drive_link
 + ***Link to tutorial*** - https://youtu.be/722mMo0YEDE
++ Link to functionality overview - https://youtu.be/benGFpYQUJg 
 
 How this plugin works: this plugin adds new object and actor classes into engine for create defined objects(actors or actors components) 
 at defined level with procedurally generated 3D space transformation based on user defined options and parameters. New “ProcGenActor” actor 
