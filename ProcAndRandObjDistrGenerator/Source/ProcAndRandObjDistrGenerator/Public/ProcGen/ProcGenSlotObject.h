@@ -71,19 +71,43 @@ struct FStaticMeshCollisionSetup
 };
 
 USTRUCT(BlueprintType)
+struct FInstStaticMeshRenderHismSetup
+{
+	GENERATED_USTRUCT_BODY()
+
+	FInstStaticMeshRenderHismSetup()
+	{
+		minDrawDist = 2500.0f;
+		maxDrawDist = 12500.0f;
+		bHitProxies = false;
+	}
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Params)
+	float minDrawDist;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Params)
+	float maxDrawDist;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Params)
+	bool bHitProxies;
+};
+
+USTRUCT(BlueprintType)
 struct FStaticMeshRenderingOverrideSetup
 {
 	GENERATED_USTRUCT_BODY()
 
-	FStaticMeshRenderingOverrideSetup()
+	FStaticMeshRenderingOverrideSetup() : InstStaticMeshRenderHismSetup()
 	{
 		OverrideMinimalLOD = -1;
 		DesiredDrawDistance = -1.0f;
+		bUseHierarchicalInstancedMeshComp = false;
 	}
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Params)
 	int32 OverrideMinimalLOD;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Params)
 	float DesiredDrawDistance;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Params)
+	bool bUseHierarchicalInstancedMeshComp;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Params)
+	FInstStaticMeshRenderHismSetup InstStaticMeshRenderHismSetup;
 };
 
 USTRUCT(BlueprintType)

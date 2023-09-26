@@ -152,7 +152,7 @@ public:
 
 	int32 CreateNewInstancedSMInst(class UStaticMesh* pSM, FTransform& SMTrasf, int32 ParentGridCellId = -1);
 	bool RemoveInstancedSMInstById(class UStaticMesh* pSM, int32 Id, int32 ParentGridCellId = -1);
-	void ClearInstancedSMsAndInsts();
+	void ClearInstancedSMsAndInsts(bool bEndPlay = false);
 
 	void PaintBySphere(const FVector& SpherePos, float SphereSize);
 
@@ -246,6 +246,10 @@ landscape and will be assigned to each landscape virtual cell when process decid
 
 	TMap<class UStaticMesh*, class UInstancedStaticMeshComponent*> InstancedStaticMeshComponentsMap;
 	TMap<class UStaticMesh*, FInstMeshCellsData> InstancedStaticMeshComponentsMap2;
+
+	TMap<class UStaticMesh*, class UHierarchicalInstancedStaticMeshComponent*> HierarchicalInstancedStaticMeshesSaveableComponentsMap;
+	class UHierarchicalInstancedStaticMeshComponent* pCachedHierarchicalInstancedSMComp = nullptr;
+	class UStaticMesh* pLastSMForHismPtr = nullptr;
 
 	float TreeBuildRecool = 0.0f;
 	bool bNeedTreeRebuild = false;

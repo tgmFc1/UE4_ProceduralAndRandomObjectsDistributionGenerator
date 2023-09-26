@@ -35,7 +35,10 @@ ShapeLimitActors(),
 ShapeBoundingBox(EForceInit::ForceInit),
 LinkedGenSlotsUIDs(),
 InstancedStaticMeshComponentsMap(),
-InstancedStaticMeshComponentsMap2()
+InstancedStaticMeshComponentsMap2(),
+HierarchicalInstancedStaticMeshesSaveableComponentsMap(),
+pCachedHierarchicalInstancedSMComp(nullptr),
+pLastSMForHismPtr(nullptr)
 {
 	PrimaryActorTick.bCanEverTick = false;
 
@@ -131,7 +134,7 @@ void AProcGenActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		}
 	}
 
-	ClearInstancedSMsAndInsts();
+	ClearInstancedSMsAndInsts(true);
 }
 
 void AProcGenActor::OnConstruction(const FTransform& Transform)
@@ -1411,6 +1414,69 @@ UStaticMeshComponent* AProcGenActor::CreateNewSMComponent(UStaticMesh* pSM, cons
 	if (!pSM)
 		return nullptr;
 
+	if (StaticMeshRenderingOverrideSetupPtr)
+	{
+		if (StaticMeshRenderingOverrideSetupPtr->bUseHierarchicalInstancedMeshComp)
+		{
+			bool bCachedMeshMatch = pCachedHierarchicalInstancedSMComp != nullptr && pLastSMForHismPtr == pSM;
+			UHierarchicalInstancedStaticMeshComponent*& HierarchicalInstancedStaticMeshComponent = bCachedMeshMatch ? pCachedHierarchicalInstancedSMComp :
+				HierarchicalInstancedStaticMeshesSaveableComponentsMap.FindOrAdd(pSM);
+			
+			if (!HierarchicalInstancedStaticMeshComponent)
+			{
+				UHierarchicalInstancedStaticMeshComponent* StaticMeshComponent = NewObject<UHierarchicalInstancedStaticMeshComponent>(this, NAME_None, RF_Transactional);
+				StaticMeshComponent->Mobility = EComponentMobility::Static;
+				StaticMeshComponent->bSelectable = true;
+				StaticMeshComponent->bHasPerInstanceHitProxies = StaticMeshRenderingOverrideSetupPtr->InstStaticMeshRenderHismSetup.bHitProxies;
+				StaticMeshComponent->bAffectDistanceFieldLighting = false;
+				if (StaticMeshCollisionSetupPtr)
+				{
+					StaticMeshComponent->SetCollisionProfileName(StaticMeshCollisionSetupPtr->collisionProfile);
+					StaticMeshComponent->SetCollisionEnabled(ECollisionEnabled::Type(StaticMeshCollisionSetupPtr->collisionEnable));
+					StaticMeshComponent->bDisableCollision = StaticMeshCollisionSetupPtr->collisionEnable == ECollisionEnabled::NoCollision;
+					StaticMeshComponent->SetCanEverAffectNavigation(!StaticMeshComponent->bDisableCollision);
+				}
+				else
+				{
+					StaticMeshComponent->SetCollisionProfileName(NoCollisionProf);
+					StaticMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+					StaticMeshComponent->bDisableCollision = true;
+					StaticMeshComponent->SetCanEverAffectNavigation(false);
+				}
+				//StaticMeshComponent->SetCanEverAffectNavigation(false);
+				StaticMeshComponent->bAutoRebuildTreeOnInstanceChanges = true;
+				StaticMeshComponent->SetStaticMesh(pSM);
+
+				StaticMeshComponent->SetLODDataCount(pSM->GetNumLODs(), pSM->GetNumLODs());
+				StaticMeshComponent->SetCullDistances(StaticMeshRenderingOverrideSetupPtr->InstStaticMeshRenderHismSetup.minDrawDist,
+					StaticMeshRenderingOverrideSetupPtr->InstStaticMeshRenderHismSetup.maxDrawDist);
+				StaticMeshComponent->CachedMaxDrawDistance = StaticMeshRenderingOverrideSetupPtr->DesiredDrawDistance;
+
+				StaticMeshComponent->RegisterComponent();
+				StaticMeshComponent->AttachToComponent(GenerationSplineShape, FAttachmentTransformRules::KeepRelativeTransform);
+				StaticMeshComponent->ComponentTags.Add(TEXT("XProcHism"));
+				HierarchicalInstancedStaticMeshComponent = StaticMeshComponent;
+
+				AddInstanceComponent(StaticMeshComponent);
+				StaticMeshComponent->RegisterComponent();
+				StaticMeshComponent->SetActive(true);
+				StaticMeshComponent->SetVisibility(true);
+				//StaticMeshComponent->SetWorldLocation(GetActorLocation());
+
+				HierarchicalInstancedStaticMeshComponent->AddInstance(SMTrasf);
+			}
+			else
+			{
+				HierarchicalInstancedStaticMeshComponent->AddInstance(SMTrasf);
+			}
+
+			pLastSMForHismPtr = pSM;
+			pCachedHierarchicalInstancedSMComp = HierarchicalInstancedStaticMeshComponent;
+
+			return nullptr;
+		}
+	}
+
 	if (bIsSimple)
 	{
 		//UInstancedStaticMeshComponent::AddInstanceInternal()
@@ -1774,7 +1840,7 @@ bool AProcGenActor::RemoveInstancedSMInstById(UStaticMesh* pSM, int32 Id, int32 
 	return false;
 }
 
-void AProcGenActor::ClearInstancedSMsAndInsts()
+void AProcGenActor::ClearInstancedSMsAndInsts(bool bEndPlay)
 {
 	for (TPair<UStaticMesh*, UInstancedStaticMeshComponent*>& InstCompData : InstancedStaticMeshComponentsMap)
 	{
@@ -1811,6 +1877,32 @@ void AProcGenActor::ClearInstancedSMsAndInsts()
 	CachedParentGridCellId = -1;
 	CachedInstMeshCellInfoPointer = nullptr;
 	LastSMPtr = nullptr;
+
+	if (bEndPlay)
+	{
+		pCachedHierarchicalInstancedSMComp = nullptr;
+		pLastSMForHismPtr = nullptr;
+		//HierarchicalInstancedStaticMeshesSaveableComponentsMap.Empty();
+		return;
+	}
+
+	TArray<UActorComponent*> HismComponents = GetComponentsByTag(UHierarchicalInstancedStaticMeshComponent::StaticClass(), TEXT("XProcHism"));
+	for (TPair<UStaticMesh*, UHierarchicalInstancedStaticMeshComponent*>& InstCompData : HierarchicalInstancedStaticMeshesSaveableComponentsMap)
+	{
+		if (InstCompData.Value && HismComponents.Contains(InstCompData.Value))
+		{
+			InstCompData.Value->ClearInstances();
+			InstCompData.Value->DetachFromParent();
+			InstCompData.Value->UnregisterComponent();
+			InstCompData.Value->RemoveFromRoot();
+			InstCompData.Value->ConditionalBeginDestroy();
+		}
+	}
+
+	HierarchicalInstancedStaticMeshesSaveableComponentsMap.Empty();
+
+	pCachedHierarchicalInstancedSMComp = nullptr;
+	pLastSMForHismPtr = nullptr;
 }
 
 void AProcGenActor::PaintBySphere(const FVector& SpherePos, float SphereSize)
