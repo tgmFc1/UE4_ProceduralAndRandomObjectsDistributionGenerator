@@ -1424,7 +1424,16 @@ UStaticMeshComponent* AProcGenActor::CreateNewSMComponent(UStaticMesh* pSM, cons
 			
 			if (!HierarchicalInstancedStaticMeshComponent)
 			{
-				UHierarchicalInstancedStaticMeshComponent* StaticMeshComponent = NewObject<UHierarchicalInstancedStaticMeshComponent>(this, NAME_None, RF_Transactional);
+				UHierarchicalInstancedStaticMeshComponent* StaticMeshComponent = nullptr;
+				if (StaticMeshRenderingOverrideSetupPtr->InstStaticMeshRenderHismSetup.HISMCustomClass.Get())
+				{
+					StaticMeshComponent = NewObject<UHierarchicalInstancedStaticMeshComponent>(this, StaticMeshRenderingOverrideSetupPtr->InstStaticMeshRenderHismSetup.HISMCustomClass,
+						NAME_None, RF_Transactional);
+				}
+				else
+				{
+					StaticMeshComponent = NewObject<UHierarchicalInstancedStaticMeshComponent>(this, NAME_None, RF_Transactional);
+				}
 				StaticMeshComponent->Mobility = EComponentMobility::Static;
 				StaticMeshComponent->bSelectable = true;
 				StaticMeshComponent->bHasPerInstanceHitProxies = StaticMeshRenderingOverrideSetupPtr->InstStaticMeshRenderHismSetup.bHitProxies;
@@ -1992,7 +2001,7 @@ void AProcGenActor::PaintBySphere(const FVector& SpherePos, float SphereSize)
 		}
 	}
 
-	CurCreatedProcGenSlotObject.Get()->RequestGenerateInBBoxWithShapeBorder(MeshPoints, pCurEdWorld, fGenPowScaled, PolyShapeNv, ExcludedPls, this, GenDir, AlignDir);
+	CurCreatedProcGenSlotObject.Get()->RequestGenerateInBBoxWithShapeBorder(MeshPoints, pCurEdWorld, fGenPowScaled, PolyShapeNv, ExcludedPls, this, GenDir, AlignDir, 0.0f, false, 0.0f, false);
 }
 
 bool AProcGenActor::IsPointInsideConnectedShapeLimitActors(const FVector& PointPos)

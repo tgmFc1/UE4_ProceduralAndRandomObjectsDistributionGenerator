@@ -618,7 +618,7 @@ struct GenerationHelper
 };
 
 void UPGSObj::RequestGenerateInBBoxWithShapeBorder(const TArray<FVector>& GenerationBBoxPoints, /*const */UWorld* pGenerationWorld, float GenerationPower, FPoly& ShapeBorder,
-	TArray<FPoly>& ExclusionBorders, AActor* OptProcGenActor, FVector OptGenerationDir, FVector OptAlignDir, float OptGenDirTraceMaxDist, bool bOptGenDirNoOutOfBounds, float OptAlignYaw)
+	TArray<FPoly>& ExclusionBorders, AActor* OptProcGenActor, FVector OptGenerationDir, FVector OptAlignDir, float OptGenDirTraceMaxDist, bool bOptGenDirNoOutOfBounds, float OptAlignYaw, bool bShowProgress)
 {
 	/*{
 		FString MsgTextStr = FString::Printf(TEXT("UPGSObj::RequestGenerateInBBoxWithShapeBorder ExclusionBorders num - %i"), ExclusionBorders.Num());
@@ -642,7 +642,8 @@ void UPGSObj::RequestGenerateInBBoxWithShapeBorder(const TArray<FVector>& Genera
 	{
 		FString STaskMainMsgTextStr = "Generation started by blueprintable event";
 		FScopedSlowTask GSTMainBP(100.0f, FText::FromString(STaskMainMsgTextStr));
-		GSTMainBP.MakeDialog();
+		if(bShowProgress)
+			GSTMainBP.MakeDialog();
 
 		FGenerationInitialData InitialData = FGenerationInitialData();
 		InitialData.bOptGenDirNoOutOfBounds = bOptGenDirNoOutOfBounds;
@@ -656,16 +657,19 @@ void UPGSObj::RequestGenerateInBBoxWithShapeBorder(const TArray<FVector>& Genera
 		InitialData.OptProcGenActor = OptProcGenActor;
 		InitialData.pGenerationWorld = pGenerationWorld;
 		InitialData.ShapeBorder = ShapeBorder;
+		InitialData.bShowProgress = bShowProgress;
 		BPImplStartGenerateEvent(InitialData);
 
-		GSTMainBP.EnterProgressFrame(100.0f);
+		if (bShowProgress)
+			GSTMainBP.EnterProgressFrame(100.0f);
 
 		return;
 	}
 
 	FString STaskMainMsgTextStr = FString::Printf(TEXT("Procedural Generation started, slots to generate - %i, prepare additional generation data"), GenerationParamsArr.Num());
 	FScopedSlowTask GSTMain(100.0f, FText::FromString(STaskMainMsgTextStr));
-	GSTMain.MakeDialog();
+	if (bShowProgress)
+		GSTMain.MakeDialog();
 
 	pCurOptProcGenActor = OptProcGenActor;
 
@@ -770,7 +774,8 @@ void UPGSObj::RequestGenerateInBBoxWithShapeBorder(const TArray<FVector>& Genera
 		//FScopedSlowTask GenSlowTask(NumGenChecks, FText::FromString(STaskMsgTextStr));
 		//GenSlowTask.Initialize();
 		//GenSlowTask.MakeDialogDelayed(0.5f, false, false);
-		GenSlowTask.MakeDialog();
+		if (bShowProgress)
+			GenSlowTask.MakeDialog();
 		
 		uint32 NextProgressFrame = 0;
 		for (uint32 i = 0; i < NumGenChecks; ++i)
@@ -789,7 +794,8 @@ void UPGSObj::RequestGenerateInBBoxWithShapeBorder(const TArray<FVector>& Genera
 				FString STaskMsgTextStr2 = FString::Printf(TEXT("Generation of slot process, slot Id - %i, num of next generation attempts - %i"), ProcGenSlot.SlotUniqueId, NumGenChecks - i);
 				GenSlowTask.CurrentFrameScope = 0.0f;
 				GenSlowTask.CompletedWork = (float(i) / float(NumGenChecks)) * 100.0f;
-				GenSlowTask.EnterProgressFrame(0.0f, FText::FromString(STaskMsgTextStr2));
+				if (bShowProgress)
+					GenSlowTask.EnterProgressFrame(0.0f, FText::FromString(STaskMsgTextStr2));
 			}
 
 			if (IsPendingKillOrUnreachable())
@@ -2595,7 +2601,8 @@ TArray<FGenerationObjectPointData> UPGSObj::PrepareGenerationPoints(const FGener
 
 	FString STaskMainMsgTextStr = "Prepare Generation Points process started";//FString::Printf(TEXT("Prepare Generation Points, slots to generate - %i, prepare additional generation data"), GenerationParamsArr.Num());
 	FScopedSlowTask GSTMain(100.0f, FText::FromString(STaskMainMsgTextStr));
-	GSTMain.MakeDialog();
+	if(InitialData.bShowProgress)
+		GSTMain.MakeDialog();
 
 	if (bUseOptGenDir)
 	{
@@ -2645,7 +2652,9 @@ TArray<FGenerationObjectPointData> UPGSObj::PrepareGenerationPoints(const FGener
 			STaskMainMsgTextStr = FString::Printf(TEXT("Left Points to generate - %i"), NumGenChecks - pointsProcessed);
 			GSTMain.CurrentFrameScope = 0.0f;
 			GSTMain.CompletedWork = (float(pointsProcessed) / float(NumGenChecks)) * 100.0f;
-			GSTMain.EnterProgressFrame(0.0f, FText::FromString(STaskMainMsgTextStr));
+			if (InitialData.bShowProgress)
+				GSTMain.EnterProgressFrame(0.0f, FText::FromString(STaskMainMsgTextStr));
+
 			pointsProcessed2 += 150;
 		}
 		++pointsProcessed;
@@ -2835,7 +2844,8 @@ TArray<FGenerationHandledPointData> UPGSObj::HandlingProcessOfGenerationPoints(c
 
 	FString STaskMainMsgTextStr = "Handling Process Of Generation Points started";
 	FScopedSlowTask GSTMain(100.0f, FText::FromString(STaskMainMsgTextStr));
-	GSTMain.MakeDialog();
+	if (InitialData.bShowProgress)
+		GSTMain.MakeDialog();
 
 	FPoly ShapeBorder = InitialData.ShapeBorder;
 	TArray<FPoly> TrianglesPolyArr = TArray<FPoly>();
@@ -2876,7 +2886,9 @@ TArray<FGenerationHandledPointData> UPGSObj::HandlingProcessOfGenerationPoints(c
 			STaskMainMsgTextStr = FString::Printf(TEXT("Left Points to handle - %i"), PointsData.Num() - pointsProcessed);
 			GSTMain.CurrentFrameScope = 0.0f;
 			GSTMain.CompletedWork = (float(pointsProcessed) / float(PointsData.Num())) * 100.0f;
-			GSTMain.EnterProgressFrame(0.0f, FText::FromString(STaskMainMsgTextStr));
+			if (InitialData.bShowProgress)
+				GSTMain.EnterProgressFrame(0.0f, FText::FromString(STaskMainMsgTextStr));
+
 			pointsProcessed2 += 150;
 		}
 		++pointsProcessed;
@@ -3304,7 +3316,8 @@ TArray<FGenerationHandledPointData> UPGSObj::FilterOfHandledPointsByParams(const
 
 	FString STaskMainMsgTextStr = "Filtering Of Handled Points started";
 	FScopedSlowTask GSTMain(100.0f, FText::FromString(STaskMainMsgTextStr));
-	GSTMain.MakeDialog();
+	if (InitialData.bShowProgress)
+		GSTMain.MakeDialog();
 
 	TArray<FGenerationGridCell*> ArrGridCellsNearest = TArray<FGenerationGridCell*>();
 	FBox BoundsOfNewObject = FBox(EForceInit::ForceInit);
@@ -3321,7 +3334,9 @@ TArray<FGenerationHandledPointData> UPGSObj::FilterOfHandledPointsByParams(const
 			STaskMainMsgTextStr = FString::Printf(TEXT("Left Points to filter - %i"), NumOfPoints - pointsProcessed);
 			GSTMain.CurrentFrameScope = 0.0f;
 			GSTMain.CompletedWork = (float(pointsProcessed) / float(NumOfPoints)) * 100.0f;
-			GSTMain.EnterProgressFrame(0.0f, FText::FromString(STaskMainMsgTextStr));
+			if (InitialData.bShowProgress)
+				GSTMain.EnterProgressFrame(0.0f, FText::FromString(STaskMainMsgTextStr));
+
 			pointsProcessed2 += 150;
 		}
 		++pointsProcessed;
@@ -3710,7 +3725,8 @@ TArray<FTransform> UPGSObj::GenerateObjectsTransformsFromHandledPoints(const FGe
 
 	FString STaskMainMsgTextStr = "Generate Objects Transforms From Handled Points started";
 	FScopedSlowTask GSTMain(100.0f, FText::FromString(STaskMainMsgTextStr));
-	GSTMain.MakeDialog();
+	if (InitialData.bShowProgress)
+		GSTMain.MakeDialog();
 
 	uint32 pointsProcessed = 0;
 	uint32 pointsProcessed2 = 0;
@@ -3723,7 +3739,9 @@ TArray<FTransform> UPGSObj::GenerateObjectsTransformsFromHandledPoints(const FGe
 			STaskMainMsgTextStr = FString::Printf(TEXT("Left Transforms to generate - %i"), HandledPoints.Num() - pointsProcessed);
 			GSTMain.CurrentFrameScope = 0.0f;
 			GSTMain.CompletedWork = (float(pointsProcessed) / float(HandledPoints.Num())) * 100.0f;
-			GSTMain.EnterProgressFrame(0.0f, FText::FromString(STaskMainMsgTextStr));
+			if (InitialData.bShowProgress)
+				GSTMain.EnterProgressFrame(0.0f, FText::FromString(STaskMainMsgTextStr));
+
 			pointsProcessed2 += 150;
 		}
 		++pointsProcessed;
@@ -3967,7 +3985,8 @@ TArray<FTransform> UPGSObj::FilterOfGeneratedTransforms(const FGenerationInitial
 
 	FString STaskMainMsgTextStr = "Filtering Of Generated Transforms started";
 	FScopedSlowTask GSTMain(100.0f, FText::FromString(STaskMainMsgTextStr));
-	GSTMain.MakeDialog();
+	if (InitialData.bShowProgress)
+		GSTMain.MakeDialog();
 
 	uint32 pointsProcessed = 0;
 	uint32 pointsProcessed2 = 0;
@@ -3979,7 +3998,9 @@ TArray<FTransform> UPGSObj::FilterOfGeneratedTransforms(const FGenerationInitial
 			STaskMainMsgTextStr = FString::Printf(TEXT("Left Transforms to filter - %i"), numOfTrasfs - pointsProcessed);
 			GSTMain.CurrentFrameScope = 0.0f;
 			GSTMain.CompletedWork = (float(pointsProcessed) / float(numOfTrasfs)) * 100.0f;
-			GSTMain.EnterProgressFrame(0.0f, FText::FromString(STaskMainMsgTextStr));
+			if (InitialData.bShowProgress)
+				GSTMain.EnterProgressFrame(0.0f, FText::FromString(STaskMainMsgTextStr));
+
 			pointsProcessed2 += 150;
 		}
 		++pointsProcessed;

@@ -75,7 +75,7 @@ struct FInstStaticMeshRenderHismSetup
 {
 	GENERATED_USTRUCT_BODY()
 
-	FInstStaticMeshRenderHismSetup()
+	FInstStaticMeshRenderHismSetup() : HISMCustomClass()
 	{
 		minDrawDist = 2500.0f;
 		maxDrawDist = 12500.0f;
@@ -87,6 +87,8 @@ struct FInstStaticMeshRenderHismSetup
 	float maxDrawDist;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Params)
 	bool bHitProxies;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Params)
+	TSubclassOf<class UHierarchicalInstancedStaticMeshComponent> HISMCustomClass;
 };
 
 USTRUCT(BlueprintType)
@@ -616,7 +618,8 @@ struct FGenerationInitialData
 		OptAlignDir(FVector::ZeroVector),
 		OptGenDirTraceMaxDist(0.0f),
 		bOptGenDirNoOutOfBounds(false),
-		OptAlignYaw(0.0f)
+		OptAlignYaw(0.0f),
+		bShowProgress(true)
 	{
 
 	}
@@ -640,6 +643,8 @@ struct FGenerationInitialData
 	bool bOptGenDirNoOutOfBounds;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Data)
 	float OptAlignYaw;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Data)
+	bool bShowProgress;
 };
 
 USTRUCT(BlueprintType)
@@ -775,7 +780,7 @@ public:
 	//UFUNCTION(BlueprintCallable, Category = Generation)
 	void RequestGenerateInBBoxWithShapeBorder(const TArray<FVector>& GenerationBBoxPoints, /*const */UWorld* pGenerationWorld, float GenerationPower, FPoly& ShapeBorder,
 		TArray<FPoly>& ExclusionBorders, AActor* OptProcGenActor = nullptr, FVector OptGenerationDir = FVector::ZeroVector, FVector OptAlignDir = FVector::ZeroVector,
-		float OptGenDirTraceMaxDist = 0.0f, bool bOptGenDirNoOutOfBounds = false, float OptAlignYaw = 0.0f);
+		float OptGenDirTraceMaxDist = 0.0f, bool bOptGenDirNoOutOfBounds = false, float OptAlignYaw = 0.0f, bool bShowProgress = true);
 	UFUNCTION(BlueprintCallable, Category = End)
 	void PrepareToDestroy();
 	UFUNCTION(BlueprintCallable, Category = End)

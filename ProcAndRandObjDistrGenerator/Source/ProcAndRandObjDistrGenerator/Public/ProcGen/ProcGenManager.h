@@ -216,6 +216,7 @@ public:
 	TArray<FGenerationGridCell*> GetNearestGridCellsGroupToPoint(const FVector& Point);
 	static class UWorld* GetCurrentWorldStatic();
 	class UWorld* GetWorldPRFEditor();
+	static void RemoveTransfFromTransfArr(TArray<FTransform>& TransfsArr, const FTransform& TransfToDelete);
 	UFUNCTION()
 	void OnPIESessionStarted(const bool bStarted);
 	UFUNCTION()

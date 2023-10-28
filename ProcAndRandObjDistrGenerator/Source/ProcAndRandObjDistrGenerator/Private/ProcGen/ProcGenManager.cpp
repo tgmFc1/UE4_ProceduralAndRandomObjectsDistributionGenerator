@@ -272,6 +272,15 @@ void UProcGenManager::RequestPaint(bool bPaintOrClearBrush)
 			{
 				if (FVector::Dist(CurrentPaintPos, pActor->GetActorLocation()) <= PaintSphereSize)
 				{
+					FGenerationGridCell* pGridCell = GetNearestGridCellToPointFast(pActor->GetActorLocation());
+					if (pGridCell)
+					{
+						for (TPair<int32, FGenerationGridCellGenSlot>& CurPair : pGridCell->CellSlotsInfo)
+						{
+							//CurPair.Value.TempTransformsForDistanceChecks.RemoveSwap(pActor->GetTransform());
+							RemoveTransfFromTransfArr(CurPair.Value.TempTransformsForDistanceChecks, pActor->GetTransform());
+						}
+					}
 					pActor->Destroy();
 				}
 			}
@@ -289,8 +298,24 @@ void UProcGenManager::RequestPaint(bool bPaintOrClearBrush)
 				if (!pActComp || pActComp->IsDefaultSubobject())
 					continue;
 
+				UHierarchicalInstancedStaticMeshComponent* pHISM_Comp = Cast<UHierarchicalInstancedStaticMeshComponent>(pActComp);
+				USceneComponent* pScene_Comp = Cast<USceneComponent>(pActComp);
+				if (pScene_Comp && !pHISM_Comp)
+				{
+					FGenerationGridCell* pGridCell = GetNearestGridCellToPointFast(pScene_Comp->GetComponentLocation());
+					if (pGridCell)
+					{
+						for (TPair<int32, FGenerationGridCellGenSlot>& CurPair : pGridCell->CellSlotsInfo)
+						{
+							//CurPair.Value.TempTransformsForDistanceChecks.RemoveSwap(pScene_Comp->GetComponentTransform());
+							RemoveTransfFromTransfArr(CurPair.Value.TempTransformsForDistanceChecks, pScene_Comp->GetComponentTransform());
+						}
+					}
+				}
+
 				UStaticMeshComponent* pSM_Comp = Cast<UStaticMeshComponent>(pActComp);
-				if (pSM_Comp)
+				
+				if (!pHISM_Comp && pSM_Comp)
 				{
 					if (FVector::Dist(CurrentPaintPos, pSM_Comp->GetComponentTransform().GetLocation()) > PaintSphereSize)
 					{
@@ -330,6 +355,27 @@ void UProcGenManager::RequestPaint(bool bPaintOrClearBrush)
 					{
 						ActProcGen->CurCreatedProcGenSlotObject.Get()->RemoveTempTrasfFromSlots(ObjTransf);
 					}
+					continue;
+				}
+
+				if (pHISM_Comp)
+				{
+					FTransform InstTransf = FTransform();
+					TArray<int32> OverInstsIdsArr = pHISM_Comp->GetInstancesOverlappingSphere(CurrentPaintPos, PaintSphereSize);
+					for (int32 instanceId : OverInstsIdsArr)
+					{
+						pHISM_Comp->GetInstanceTransform(instanceId, InstTransf, true);
+						FGenerationGridCell* pGridCell = GetNearestGridCellToPointFast(InstTransf.GetLocation());
+						if (pGridCell)
+						{
+							for (TPair<int32, FGenerationGridCellGenSlot>& CurPair : pGridCell->CellSlotsInfo)
+							{
+								//CurPair.Value.TempTransformsForDistanceChecks.RemoveSwap(InstTransf);
+								RemoveTransfFromTransfArr(CurPair.Value.TempTransformsForDistanceChecks, InstTransf);
+							}
+						}
+					}
+					pHISM_Comp->RemoveInstances(OverInstsIdsArr);
 					continue;
 				}
 			}
@@ -372,6 +418,15 @@ void UProcGenManager::RequestPaint(bool bPaintOrClearBrush)
 			{
 				if (IsActorCreatedByGenerator(pHitedActor))
 				{
+					FGenerationGridCell* pGridCell = GetNearestGridCellToPointFast(pHitedActor->GetActorLocation());
+					if (pGridCell)
+					{
+						for (TPair<int32, FGenerationGridCellGenSlot>& CurPair : pGridCell->CellSlotsInfo)
+						{
+							//CurPair.Value.TempTransformsForDistanceChecks.RemoveSwap(pHitedActor->GetTransform());
+							RemoveTransfFromTransfArr(CurPair.Value.TempTransformsForDistanceChecks, pHitedActor->GetTransform());
+						}
+					}
 					pHitedActor->Destroy();
 				}
 			}
@@ -382,7 +437,23 @@ void UProcGenManager::RequestPaint(bool bPaintOrClearBrush)
 				if (OwnerProcGen)
 				{
 					UStaticMeshComponent* pSM_Comp = Cast<UStaticMeshComponent>(pHitedPrimitiveComponent);
-					if (pSM_Comp && !pSM_Comp->IsDefaultSubobject())
+					UHierarchicalInstancedStaticMeshComponent* pHISM_Comp = Cast<UHierarchicalInstancedStaticMeshComponent>(pHitedPrimitiveComponent);
+
+					USceneComponent* pScene_Comp = Cast<USceneComponent>(pHitedPrimitiveComponent);
+					if (pScene_Comp && !pHISM_Comp)
+					{
+						FGenerationGridCell* pGridCell = GetNearestGridCellToPointFast(pScene_Comp->GetComponentLocation());
+						if (pGridCell)
+						{
+							for (TPair<int32, FGenerationGridCellGenSlot>& CurPair : pGridCell->CellSlotsInfo)
+							{
+								//CurPair.Value.TempTransformsForDistanceChecks.RemoveSwap(pScene_Comp->GetComponentTransform());
+								RemoveTransfFromTransfArr(CurPair.Value.TempTransformsForDistanceChecks, pScene_Comp->GetComponentTransform());
+							}
+						}
+					}
+
+					if (!pHISM_Comp && pSM_Comp && !pSM_Comp->IsDefaultSubobject())
 					{
 						FTransform ObjTransf = pSM_Comp->GetComponentTransform();
 
@@ -396,6 +467,26 @@ void UProcGenManager::RequestPaint(bool bPaintOrClearBrush)
 						{
 							OwnerProcGen->CurCreatedProcGenSlotObject.Get()->RemoveTempTrasfFromSlots(ObjTransf);
 						}
+					}
+
+					if (pHISM_Comp)
+					{
+						FTransform InstTransf = FTransform();
+						TArray<int32> OverInstsIdsArr = pHISM_Comp->GetInstancesOverlappingSphere(CurrentPaintPos, PaintSphereSize);
+						for (int32 instanceId : OverInstsIdsArr)
+						{
+							pHISM_Comp->GetInstanceTransform(instanceId, InstTransf, true);
+							FGenerationGridCell* pGridCell = GetNearestGridCellToPointFast(InstTransf.GetLocation());
+							if (pGridCell)
+							{
+								for (TPair<int32, FGenerationGridCellGenSlot>& CurPair : pGridCell->CellSlotsInfo)
+								{
+									//CurPair.Value.TempTransformsForDistanceChecks.RemoveSwap(InstTransf);
+									RemoveTransfFromTransfArr(CurPair.Value.TempTransformsForDistanceChecks, InstTransf);
+								}
+							}
+						}
+						pHISM_Comp->RemoveInstances(OverInstsIdsArr);
 					}
 				}
 			}
@@ -1054,6 +1145,20 @@ UWorld* UProcGenManager::GetWorldPRFEditor()
 	}
 
 	return pCurSelectedWorld;
+}
+
+void UProcGenManager::RemoveTransfFromTransfArr(TArray<FTransform>& TransfsArr, const FTransform& TransfToDelete)
+{
+	if (TransfsArr.Num() <= 0)
+		return;
+
+	for (int32 i = TransfsArr.Num() - 1; i >= 0; --i)
+	{
+		if (TransfsArr[i].GetLocation() == TransfToDelete.GetLocation())
+		{
+			TransfsArr.RemoveAtSwap(i);
+		}
+	}
 }
 
 void UProcGenManager::OnPIESessionStarted(const bool bStarted)
