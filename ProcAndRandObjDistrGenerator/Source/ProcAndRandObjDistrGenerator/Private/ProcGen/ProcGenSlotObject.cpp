@@ -547,6 +547,10 @@ struct GenerationHelper
 									return true;
 								}
 							}
+							if ((pCurOptProcGenActor == pHitedActor) && bOnlyForOthersGenerated)
+							{
+								//TODO
+							}
 							else
 							{
 								if (pProcGenManager->IsActorAreGenerator(pHitedActor))
@@ -764,6 +768,7 @@ void UPGSObj::RequestGenerateInBBoxWithShapeBorder(const TArray<FVector>& Genera
 		bool bGenerate = false;
 		FVector TempPoint;
 		FTransform TempTransform = FTransform::Identity;
+		TempTransform.SetLocation(FVector::ZeroVector);
 		//FVector* ShapeIntersectPtr = nullptr;
 		float ModifierInfluencePercents = 1.0f;
 		float DistanceFromEdgesInfluencePercents = 1.0f;
@@ -1643,153 +1648,6 @@ void UPGSObj::RequestGenerateInBBoxWithShapeBorder(const TArray<FVector>& Genera
 
 				FRotator InitialRotation = FRotator::ZeroRotator;
 
-				if (bIsHit)
-				{
-					OriginalHitLoc = CheckHit.Location;
-					if (CheckHit.GetActor())
-					{
-						bool bIsLandscape = CheckHit.GetActor()->IsA(ALandscape::StaticClass());
-						bool bIsStaticMesh = CheckHit.GetActor()->IsA(AStaticMeshActor::StaticClass());
-
-						if (!ProcGenSlot.bGenerateOnLandscape && bIsLandscape)
-						{
-							continue;
-						}
-
-						if (!ProcGenSlot.bGenerateOnStaticMeshes && bIsStaticMesh)
-						{
-							continue;
-						}
-					}
-
-					float GroundAngleValue = FMath::RadiansToDegrees(FMath::Acos(CheckHit.Normal.Z));
-					if (ProcGenSlot.ExtendedSlopeCheckSetupParams.EnableExtendedSlopeCheck)
-					{
-						FExtendedSlopeCheckFunctionInParams ExtendedSlopeCheckFunctionInParams = FExtendedSlopeCheckFunctionInParams();
-						ExtendedSlopeCheckFunctionInParams.CheckRadius = ProcGenSlot.ExtendedSlopeCheckSetupParams.SlopeCheckRadius;
-						ExtendedSlopeCheckFunctionInParams.CurrentSlopeAngle = GroundAngleValue;
-						ExtendedSlopeCheckFunctionInParams.ParentProcGenActorPtr = pParentProcGenActor;
-						ExtendedSlopeCheckFunctionInParams.MultiLt = ProcGenSlot.bUseMultiLT;
-						ExtendedSlopeCheckFunctionInParams.StartCheckPoint = TempPoint;
-						ExtendedSlopeCheckFunctionInParams.EndCheckPoint = OriginalHitLoc;
-						ExtendedSlopeCheckFunctionInParams.HeightDifferenceToDetectEdges = ProcGenSlot.ExtendedSlopeCheckSetupParams.HeightDifferenceToDetectEdges;
-						FExtendedSlopeCheckFunctionOutParams ExtendedSlopeCheckFunctionOutParams = DoExtendedSlopeCheck(ExtendedSlopeCheckFunctionInParams, ProcGenSlot);
-						if (ProcGenSlot.ExtendedSlopeCheckSetupParams.bUseRecalculatedSlope)
-						{
-							GroundAngleValue = ExtendedSlopeCheckFunctionOutParams.RecalculatedSlopeAngle;
-						}
-
-						if (ProcGenSlot.ExtendedSlopeCheckSetupParams.bGenerationOnEdgesOnly && !ExtendedSlopeCheckFunctionOutParams.EdgeIsDetected)
-						{
-							continue;
-						}
-
-						if (ProcGenSlot.ExtendedSlopeCheckSetupParams.bGenerationOnNotEdgesOnly && ExtendedSlopeCheckFunctionOutParams.EdgeIsDetected)
-						{
-							continue;
-						}
-					}
-					if (!ProcGenSlot.SlopeMinMax.IsIgnored())
-					{
-						if (GroundAngleValue > ProcGenSlot.SlopeMinMax.MaxValue || GroundAngleValue < ProcGenSlot.SlopeMinMax.MinValue)
-						{
-							bool bNeedContinue = true;
-							if (GroundAngleValue > ProcGenSlot.SlopeMinMax.MaxValue)
-							{
-								bool bGenOverslope = RandomBoolByGenSlotParams(ProcGenSlot, ProcGenSlot.SlopeOverMaxGenChance);
-								if (bGenOverslope)
-								{
-									if (GroundAngleValue <= ProcGenSlot.SlopeMaxVariation.MaxValue)
-									{
-										bNeedContinue = false;
-									}
-								}
-							}
-							//TODO do same check for "GroundAngleValue < ProcGenSlot.SlopeMinMax.MinValue"
-
-							if (bNeedContinue)
-							{
-								continue;
-							}
-						}
-					}
-
-					if (ProcGenSlot.AddZPosFromGroundNormal != 0.0f)
-					{
-						CheckHit.Location += (CheckHit.Normal * ProcGenSlot.AddZPosFromGroundNormal);
-					}
-
-					if (!ProcGenSlot.AddZPosFGNMinMax.IsIgnored())
-					{
-						CheckHit.Location += (CheckHit.Normal * ProcGenSlot.AddZPosFGNMinMax.GetRandomValue(&ProcGenSlot));
-					}
-
-					if (!ProcGenSlot.PressInGroundMinMax.IsIgnored())
-					{
-						CheckHit.Location.Z -= ProcGenSlot.PressInGroundMinMax.GetRandomValue(&ProcGenSlot);
-					}
-
-					if (ProcGenSlot.PressInGroundBySlopeForce != 0.0f)
-					{
-						float SlopePerc = GroundAngleValue / 90.0f;
-						SlopePerc = FMath::Clamp(SlopePerc, 0.0f, 1.0f);
-						CheckHit.Location.Z -= ProcGenSlot.PressInGroundBySlopeForce * SlopePerc;
-					}
-
-					if (ProcGenSlot.bPressInGroundByNormalZ)
-					{
-						float SlopePercent = GroundAngleValue / 90.0f;
-						if (!ProcGenSlot.PressInGroundNZMinMax.IsIgnored())
-						{
-							CheckHit.Location.Z -= (ProcGenSlot.PressInGroundNZMinMax.GetRandomValue(&ProcGenSlot) * SlopePercent);
-						}
-					}
-
-					TempTransform.SetLocation(CheckHit.Location + ProcGenSlot.AdditionalLocationVector);
-
-					if (ProcGenSlot.RotateToGroundNormal)
-					{
-						FRotator AlignRotation = CheckHit.Normal.Rotation();
-						// Static meshes are authored along the vertical axis rather than the X axis, so we add 90 degrees to the static mesh's Pitch.
-						AlignRotation.Pitch -= 90.f;
-						// Clamp its value inside +/- one rotation
-						AlignRotation.Pitch = FRotator::NormalizeAxis(AlignRotation.Pitch);
-						//TempTransform.SetRotation(AlignRotation);
-						InitialRotation = AlignRotation;
-					}
-
-					if (bUseOptAlignDir)
-					{
-						//if (!OptAlignDir.IsNormalized())
-						//	OptAlignDir.Normalize();
-
-						FRotator AlignRotation = OptAlignDir.Rotation();
-						// Static meshes are authored along the vertical axis rather than the X axis, so we add 90 degrees to the static mesh's Pitch.
-						AlignRotation.Pitch -= 90.f;
-						// Clamp its value inside +/- one rotation
-						AlignRotation.Pitch = FRotator::NormalizeAxis(AlignRotation.Pitch);
-						//TempTransform.SetRotation(AlignRotation);
-						InitialRotation = AlignRotation;
-
-						if (OptAlignYaw != 0.0f)
-						{
-							InitialRotation.Yaw = 0.0f;
-						}
-					}
-				}
-				else
-				{
-					if (ProcGenSlot.FloatingInAirGeneration)
-					{
-						TempTransform.SetLocation(TempPoint + ProcGenSlot.AdditionalLocationVector);
-						OriginalHitLoc = TempTransform.GetLocation();
-					}
-					else
-					{
-						continue;
-					}
-				}
-
 				FVector SelectedScale = FVector(1);
 				if (!ProcGenSlot.ScaleMinMax.IsIgnored())
 				{
@@ -1870,18 +1728,190 @@ void UPGSObj::RequestGenerateInBBoxWithShapeBorder(const TArray<FVector>& Genera
 					}
 				}
 
+				if (bIsHit)
+				{
+					OriginalHitLoc = CheckHit.Location;
+					if (CheckHit.GetActor())
+					{
+						bool bIsLandscape = CheckHit.GetActor()->IsA(ALandscape::StaticClass());
+						bool bIsStaticMesh = CheckHit.GetActor()->IsA(AStaticMeshActor::StaticClass());
+
+						if (!ProcGenSlot.bGenerateOnLandscape && bIsLandscape)
+						{
+							continue;
+						}
+
+						if (!ProcGenSlot.bGenerateOnStaticMeshes && bIsStaticMesh)
+						{
+							continue;
+						}
+					}
+
+					float GroundAngleValue = FMath::RadiansToDegrees(FMath::Acos(CheckHit.Normal.Z));
+					if (ProcGenSlot.ExtendedSlopeCheckSetupParams.EnableExtendedSlopeCheck)
+					{
+						FExtendedSlopeCheckFunctionInParams ExtendedSlopeCheckFunctionInParams = FExtendedSlopeCheckFunctionInParams();
+						ExtendedSlopeCheckFunctionInParams.CheckRadius = ProcGenSlot.ExtendedSlopeCheckSetupParams.SlopeCheckRadius;
+						ExtendedSlopeCheckFunctionInParams.CurrentSlopeAngle = GroundAngleValue;
+						ExtendedSlopeCheckFunctionInParams.ParentProcGenActorPtr = pParentProcGenActor;
+						ExtendedSlopeCheckFunctionInParams.MultiLt = ProcGenSlot.bUseMultiLT;
+						ExtendedSlopeCheckFunctionInParams.StartCheckPoint = TempPoint;
+						ExtendedSlopeCheckFunctionInParams.EndCheckPoint = OriginalHitLoc;
+						ExtendedSlopeCheckFunctionInParams.HeightDifferenceToDetectEdges = ProcGenSlot.ExtendedSlopeCheckSetupParams.HeightDifferenceToDetectEdges;
+						FExtendedSlopeCheckFunctionOutParams ExtendedSlopeCheckFunctionOutParams = DoExtendedSlopeCheck(ExtendedSlopeCheckFunctionInParams, ProcGenSlot);
+						if (ProcGenSlot.ExtendedSlopeCheckSetupParams.bUseRecalculatedSlope)
+						{
+							GroundAngleValue = ExtendedSlopeCheckFunctionOutParams.RecalculatedSlopeAngle;
+						}
+
+						if (ProcGenSlot.ExtendedSlopeCheckSetupParams.bGenerationOnEdgesOnly && !ExtendedSlopeCheckFunctionOutParams.EdgeIsDetected)
+						{
+							continue;
+						}
+
+						if (ProcGenSlot.ExtendedSlopeCheckSetupParams.bGenerationOnNotEdgesOnly && ExtendedSlopeCheckFunctionOutParams.EdgeIsDetected)
+						{
+							continue;
+						}
+					}
+					if (!ProcGenSlot.SlopeMinMax.IsIgnored())
+					{
+						if (GroundAngleValue > ProcGenSlot.SlopeMinMax.MaxValue || GroundAngleValue < ProcGenSlot.SlopeMinMax.MinValue)
+						{
+							bool bNeedContinue = true;
+							if (GroundAngleValue > ProcGenSlot.SlopeMinMax.MaxValue)
+							{
+								bool bGenOverslope = RandomBoolByGenSlotParams(ProcGenSlot, ProcGenSlot.SlopeOverMaxGenChance);
+								if (bGenOverslope)
+								{
+									if (GroundAngleValue <= ProcGenSlot.SlopeMaxVariation.MaxValue)
+									{
+										bNeedContinue = false;
+									}
+								}
+							}
+							//TODO do same check for "GroundAngleValue < ProcGenSlot.SlopeMinMax.MinValue"
+
+							if (bNeedContinue)
+							{
+								continue;
+							}
+						}
+					}
+
+					if (ProcGenSlot.AddZPosFromGroundNormal != 0.0f)
+					{
+						float GroundNormalZLgnScaled = ProcGenSlot.AddZPosFromGroundNormal;
+						if(ProcGenSlot.bScaleAllParamsByInstScale)
+						{
+							GenerationHelper::ResizeFByScale3D(SelectedScale, GroundNormalZLgnScaled);
+						}
+						CheckHit.Location += (CheckHit.Normal * GroundNormalZLgnScaled);
+					}
+
+					if (!ProcGenSlot.AddZPosFGNMinMax.IsIgnored())
+					{
+						float ZPosFGNScaled = ProcGenSlot.AddZPosFGNMinMax.GetRandomValue(&ProcGenSlot);
+						if (ProcGenSlot.bScaleAllParamsByInstScale)
+						{
+							GenerationHelper::ResizeFByScale3D(SelectedScale, ZPosFGNScaled);
+						}
+						CheckHit.Location += (CheckHit.Normal * ZPosFGNScaled);
+					}
+
+					if (!ProcGenSlot.PressInGroundMinMax.IsIgnored())
+					{
+						float ZPressInGround = ProcGenSlot.PressInGroundMinMax.GetRandomValue(&ProcGenSlot);
+						if (ProcGenSlot.bScaleAllParamsByInstScale)
+						{
+							GenerationHelper::ResizeFByScale3D(SelectedScale, ZPressInGround);
+						}
+						CheckHit.Location.Z -= ZPressInGround;
+					}
+
+					if (ProcGenSlot.PressInGroundBySlopeForce != 0.0f)
+					{
+						float SlopePerc = GroundAngleValue / 90.0f;
+						SlopePerc = FMath::Clamp(SlopePerc, 0.0f, 1.0f);
+						float SlopeForceScaled = ProcGenSlot.PressInGroundBySlopeForce;
+						if (ProcGenSlot.bScaleAllParamsByInstScale)
+						{
+							GenerationHelper::ResizeFByScale3D(SelectedScale, SlopeForceScaled);
+						}
+						CheckHit.Location.Z -= SlopeForceScaled * SlopePerc;
+					}
+
+					if (ProcGenSlot.bPressInGroundByNormalZ)
+					{
+						float SlopePercent = GroundAngleValue / 90.0f;
+						if (!ProcGenSlot.PressInGroundNZMinMax.IsIgnored())
+						{
+							float PressZVal = ProcGenSlot.PressInGroundNZMinMax.GetRandomValue(&ProcGenSlot);
+							if (ProcGenSlot.bScaleAllParamsByInstScale)
+							{
+								GenerationHelper::ResizeFByScale3D(SelectedScale, PressZVal);
+							}
+							CheckHit.Location.Z -= (PressZVal * SlopePercent);
+						}
+					}
+
+					TempTransform.SetLocation(CheckHit.Location + ProcGenSlot.AdditionalLocationVector);
+
+					if (ProcGenSlot.RotateToGroundNormal)
+					{
+						FRotator AlignRotation = CheckHit.Normal.Rotation();
+						// Static meshes are authored along the vertical axis rather than the X axis, so we add 90 degrees to the static mesh's Pitch.
+						AlignRotation.Pitch -= 90.f;
+						// Clamp its value inside +/- one rotation
+						AlignRotation.Pitch = FRotator::NormalizeAxis(AlignRotation.Pitch);
+						//TempTransform.SetRotation(AlignRotation);
+						InitialRotation = AlignRotation;
+					}
+
+					if (bUseOptAlignDir)
+					{
+						//if (!OptAlignDir.IsNormalized())
+						//	OptAlignDir.Normalize();
+
+						FRotator AlignRotation = OptAlignDir.Rotation();
+						// Static meshes are authored along the vertical axis rather than the X axis, so we add 90 degrees to the static mesh's Pitch.
+						AlignRotation.Pitch -= 90.f;
+						// Clamp its value inside +/- one rotation
+						AlignRotation.Pitch = FRotator::NormalizeAxis(AlignRotation.Pitch);
+						//TempTransform.SetRotation(AlignRotation);
+						InitialRotation = AlignRotation;
+
+						if (OptAlignYaw != 0.0f)
+						{
+							InitialRotation.Yaw = 0.0f;
+						}
+					}
+				}
+				else
+				{
+					if (ProcGenSlot.FloatingInAirGeneration)
+					{
+						TempTransform.SetLocation(TempPoint + ProcGenSlot.AdditionalLocationVector);
+						OriginalHitLoc = TempTransform.GetLocation();
+					}
+					else
+					{
+						continue;
+					}
+				}
+
 				FRotator AdditionalRotation = FRotator::ZeroRotator;
 				if (!ProcGenSlot.RandomRotationRollMinMax.IsIgnored())
 				{
-					AdditionalRotation.Roll = ProcGenSlot.RandomRotationRollMinMax.GetRandomValue(&ProcGenSlot);
+					AdditionalRotation.Roll += ProcGenSlot.RandomRotationRollMinMax.GetRandomValue(&ProcGenSlot);
 				}
 				if (!ProcGenSlot.RandomRotationPitchMinMax.IsIgnored())
 				{
-					AdditionalRotation.Pitch = ProcGenSlot.RandomRotationPitchMinMax.GetRandomValue(&ProcGenSlot);
+					AdditionalRotation.Pitch += ProcGenSlot.RandomRotationPitchMinMax.GetRandomValue(&ProcGenSlot);
 				}
 				if (!ProcGenSlot.RandomRotationYawMinMax.IsIgnored())
 				{
-					AdditionalRotation.Yaw = ProcGenSlot.RandomRotationYawMinMax.GetRandomValue(&ProcGenSlot);
+					AdditionalRotation.Yaw += ProcGenSlot.RandomRotationYawMinMax.GetRandomValue(&ProcGenSlot);
 				}
 
 				if (OptAlignYaw != 0.0f)
@@ -1899,8 +1929,11 @@ void UPGSObj::RequestGenerateInBBoxWithShapeBorder(const TArray<FVector>& Genera
 
 				AdditionalRotation.Normalize();
 
-				TempTransform.SetRotation((FQuat(InitialRotation) * FQuat(AdditionalRotation)) * FQuat(ProcGenSlot.AdditionalRotation));
+				FQuat NormalizedQRot = (FQuat(InitialRotation) * FQuat(AdditionalRotation)).GetNormalized() * FQuat(ProcGenSlot.AdditionalRotation);
+				NormalizedQRot.Normalize();
 				TempTransform.SetScale3D(SelectedScale);
+				TempTransform.SetRotation(NormalizedQRot);
+				FTransform TempTransformWithoutFlip = TempTransform;
 
 				if (ProcGenSlot.bCollisionCheckBeforeGenerate)
 				{
@@ -2035,6 +2068,20 @@ void UPGSObj::RequestGenerateInBBoxWithShapeBorder(const TArray<FVector>& Genera
 					//FMath::SegmentDistToSegmentSafe()
 				}
 
+				if (ProcGenSlot.bRandomPitch180)
+				{
+					bool Add180ToPitch = UKismetMathLibrary::RandomBoolWithWeightFromStream(0.5f, ProcGenSlot.CurrentGenerationStream);
+					if (Add180ToPitch)
+					{
+						FRotator AlignRotation = FVector(0, 0, -1).Rotation();
+						AlignRotation.Pitch -= 90.f;
+						AlignRotation.Pitch = FRotator::NormalizeAxis(AlignRotation.Pitch);
+						NormalizedQRot = NormalizedQRot * FQuat(AlignRotation);
+						NormalizedQRot.Normalize();
+						TempTransform.SetRotation(NormalizedQRot);
+					}
+				}
+
 				if (ProcGenSlot.bIsGridGenEnabled)
 				{
 					FGenerationGridCell* pGridCell = pProcGenManager->GetNearestGridCellToPointFast(TempTransform.GetLocation());
@@ -2100,14 +2147,14 @@ void UPGSObj::RequestGenerateInBBoxWithShapeBorder(const TArray<FVector>& Genera
 				//continue;
 				//UKismetSystemLibrary::DrawDebugLine(pGenerationWorld, TempTransform.GetLocation(), FVector(FMath::RandRange(-100.0f, 100.0f), FMath::RandRange(-100.0f, 100.0f), FMath::RandRange(-100.0f, 100.0f)), FLinearColor::Red, 15.3f);
 
-				ProcGenSlot.TempTransformsForObjects.Add(TempTransform);
+				ProcGenSlot.TempTransformsForObjects.Add(TempTransformWithoutFlip);
 				if (ProcGenSlot.bEnableGridBasedDistanceCheckOptimization)
 				{
 					FGenerationGridCell* pGridCell = pProcGenManager->GetNearestGridCellToPointFast(TempTransform.GetLocation());
 					if (pGridCell)
 					{
 						FGenerationGridCellGenSlot& CellGenSlot = pGridCell->CellSlotsInfo.FindOrAdd(ProcGenSlot.SlotUniqueId);
-						CellGenSlot.TempTransformsForDistanceChecks.Add(TempTransform);
+						CellGenSlot.TempTransformsForDistanceChecks.Add(TempTransformWithoutFlip);
 					}
 				}
 
@@ -3766,82 +3813,6 @@ TArray<FTransform> UPGSObj::GenerateObjectsTransformsFromHandledPoints(const FGe
 		FTransform TempTransform = FTransform::Identity;
 		FRotator InitialRotation = FRotator::ZeroRotator;
 		FVector PointLoc = CurHdlPoint.PointData.PointLocation;
-		if (CurHdlPoint.bHitSuccessfull)
-		{
-			if (PGSParams.AddZPosFromGroundNormal != 0.0f)
-			{
-				PointLoc += (CurHdlPoint.HitNormal * PGSParams.AddZPosFromGroundNormal);
-			}
-
-			if (!PGSParams.AddZPosFGNMinMax.IsIgnored())
-			{
-				PointLoc += (CurHdlPoint.HitNormal * PGSParams.AddZPosFGNMinMax.GetRandomValue(&PGSParams));
-			}
-
-			if (!PGSParams.PressInGroundMinMax.IsIgnored())
-			{
-				PointLoc.Z -= PGSParams.PressInGroundMinMax.GetRandomValue(&PGSParams);
-			}
-
-			if (PGSParams.PressInGroundBySlopeForce != 0.0f)
-			{
-				float SlopePerc = CurHdlPoint.GroundAngle / 90.0f;
-				SlopePerc = FMath::Clamp(SlopePerc, 0.0f, 1.0f);
-				PointLoc.Z -= PGSParams.PressInGroundBySlopeForce * SlopePerc;
-			}
-
-			if (PGSParams.bPressInGroundByNormalZ)
-			{
-				float SlopePercent = CurHdlPoint.GroundAngle / 90.0f;
-				if (!PGSParams.PressInGroundNZMinMax.IsIgnored())
-				{
-					PointLoc.Z -= (PGSParams.PressInGroundNZMinMax.GetRandomValue(&PGSParams) * SlopePercent);
-				}
-			}
-
-			TempTransform.SetLocation(PointLoc + PGSParams.AdditionalLocationVector);
-
-			if (PGSParams.RotateToGroundNormal)
-			{
-				FRotator AlignRotation = CurHdlPoint.HitNormal.Rotation();
-				// Static meshes are authored along the vertical axis rather than the X axis, so we add 90 degrees to the static mesh's Pitch.
-				AlignRotation.Pitch -= 90.f;
-				// Clamp its value inside +/- one rotation
-				AlignRotation.Pitch = FRotator::NormalizeAxis(AlignRotation.Pitch);
-				//TempTransform.SetRotation(AlignRotation);
-				InitialRotation = AlignRotation;
-			}
-
-			if (bUseOptAlignDir)
-			{
-				//if (!OptAlignDir.IsNormalized())
-				//	OptAlignDir.Normalize();
-
-				FRotator AlignRotation = OptAlignDir.Rotation();
-				// Static meshes are authored along the vertical axis rather than the X axis, so we add 90 degrees to the static mesh's Pitch.
-				AlignRotation.Pitch -= 90.f;
-				// Clamp its value inside +/- one rotation
-				AlignRotation.Pitch = FRotator::NormalizeAxis(AlignRotation.Pitch);
-				//TempTransform.SetRotation(AlignRotation);
-				InitialRotation = AlignRotation;
-
-				if (OptAlignYaw != 0.0f)
-				{
-					InitialRotation.Yaw = 0.0f;
-				}
-			}
-		}
-		else
-		{
-			if (PGSParams.FloatingInAirGeneration)
-			{
-				TempTransform.SetLocation(CurHdlPoint.PointData.PointLocationSource + PGSParams.AdditionalLocationVector);
-			}
-			else
-			{
-				continue;
-			}
-		}
 
 		FVector SelectedScale = FVector(1);
 		if (!PGSParams.ScaleMinMax.IsIgnored())
@@ -3923,18 +3894,120 @@ TArray<FTransform> UPGSObj::GenerateObjectsTransformsFromHandledPoints(const FGe
 			}
 		}
 
+		if (CurHdlPoint.bHitSuccessfull)
+		{
+			if (PGSParams.AddZPosFromGroundNormal != 0.0f)
+			{
+				float GroundNormalZLgnScaled = PGSParams.AddZPosFromGroundNormal;
+				if (PGSParams.bScaleAllParamsByInstScale)
+				{
+					GenerationHelper::ResizeFByScale3D(SelectedScale, GroundNormalZLgnScaled);
+				}
+				PointLoc += (CurHdlPoint.HitNormal * GroundNormalZLgnScaled);
+			}
+
+			if (!PGSParams.AddZPosFGNMinMax.IsIgnored())
+			{
+				float ZPosFGNScaled = PGSParams.AddZPosFGNMinMax.GetRandomValue(&PGSParams);
+				if (PGSParams.bScaleAllParamsByInstScale)
+				{
+					GenerationHelper::ResizeFByScale3D(SelectedScale, ZPosFGNScaled);
+				}
+				PointLoc += (CurHdlPoint.HitNormal * ZPosFGNScaled);
+			}
+
+			if (!PGSParams.PressInGroundMinMax.IsIgnored())
+			{
+				float ZPressInGroundScaled = PGSParams.PressInGroundMinMax.GetRandomValue(&PGSParams);
+				if (PGSParams.bScaleAllParamsByInstScale)
+				{
+					GenerationHelper::ResizeFByScale3D(SelectedScale, ZPressInGroundScaled);
+				}
+				PointLoc.Z -= ZPressInGroundScaled;
+			}
+
+			if (PGSParams.PressInGroundBySlopeForce != 0.0f)
+			{
+				float SlopePerc = CurHdlPoint.GroundAngle / 90.0f;
+				SlopePerc = FMath::Clamp(SlopePerc, 0.0f, 1.0f);
+				float ZPressInGroundSFScaled = PGSParams.PressInGroundBySlopeForce;
+				if (PGSParams.bScaleAllParamsByInstScale)
+				{
+					GenerationHelper::ResizeFByScale3D(SelectedScale, ZPressInGroundSFScaled);
+				}
+				PointLoc.Z -= ZPressInGroundSFScaled * SlopePerc;
+			}
+
+			if (PGSParams.bPressInGroundByNormalZ)
+			{
+				float SlopePercent = CurHdlPoint.GroundAngle / 90.0f;
+				if (!PGSParams.PressInGroundNZMinMax.IsIgnored())
+				{
+					float ZPressInGroundNZScaled = PGSParams.PressInGroundNZMinMax.GetRandomValue(&PGSParams);
+					if (PGSParams.bScaleAllParamsByInstScale)
+					{
+						GenerationHelper::ResizeFByScale3D(SelectedScale, ZPressInGroundNZScaled);
+					}
+					PointLoc.Z -= (ZPressInGroundNZScaled * SlopePercent);
+				}
+			}
+
+			TempTransform.SetLocation(PointLoc + PGSParams.AdditionalLocationVector);
+
+			if (PGSParams.RotateToGroundNormal)
+			{
+				FRotator AlignRotation = CurHdlPoint.HitNormal.Rotation();
+				// Static meshes are authored along the vertical axis rather than the X axis, so we add 90 degrees to the static mesh's Pitch.
+				AlignRotation.Pitch -= 90.f;
+				// Clamp its value inside +/- one rotation
+				AlignRotation.Pitch = FRotator::NormalizeAxis(AlignRotation.Pitch);
+				//TempTransform.SetRotation(AlignRotation);
+				InitialRotation = AlignRotation;
+			}
+
+			if (bUseOptAlignDir)
+			{
+				//if (!OptAlignDir.IsNormalized())
+				//	OptAlignDir.Normalize();
+
+				FRotator AlignRotation = OptAlignDir.Rotation();
+				// Static meshes are authored along the vertical axis rather than the X axis, so we add 90 degrees to the static mesh's Pitch.
+				AlignRotation.Pitch -= 90.f;
+				// Clamp its value inside +/- one rotation
+				AlignRotation.Pitch = FRotator::NormalizeAxis(AlignRotation.Pitch);
+				//TempTransform.SetRotation(AlignRotation);
+				InitialRotation = AlignRotation;
+
+				if (OptAlignYaw != 0.0f)
+				{
+					InitialRotation.Yaw = 0.0f;
+				}
+			}
+		}
+		else
+		{
+			if (PGSParams.FloatingInAirGeneration)
+			{
+				TempTransform.SetLocation(CurHdlPoint.PointData.PointLocationSource + PGSParams.AdditionalLocationVector);
+			}
+			else
+			{
+				continue;
+			}
+		}
+
 		FRotator AdditionalRotation = FRotator::ZeroRotator;
 		if (!PGSParams.RandomRotationRollMinMax.IsIgnored())
 		{
-			AdditionalRotation.Roll = PGSParams.RandomRotationRollMinMax.GetRandomValue(&PGSParams);
+			AdditionalRotation.Roll += PGSParams.RandomRotationRollMinMax.GetRandomValue(&PGSParams);
 		}
 		if (!PGSParams.RandomRotationPitchMinMax.IsIgnored())
 		{
-			AdditionalRotation.Pitch = PGSParams.RandomRotationPitchMinMax.GetRandomValue(&PGSParams);
+			AdditionalRotation.Pitch += PGSParams.RandomRotationPitchMinMax.GetRandomValue(&PGSParams);
 		}
 		if (!PGSParams.RandomRotationYawMinMax.IsIgnored())
 		{
-			AdditionalRotation.Yaw = PGSParams.RandomRotationYawMinMax.GetRandomValue(&PGSParams);
+			AdditionalRotation.Yaw += PGSParams.RandomRotationYawMinMax.GetRandomValue(&PGSParams);
 		}
 
 		if (OptAlignYaw != 0.0f)
@@ -4206,10 +4279,27 @@ bool UPGSObj::GenerateObjectOnLevel(FProcGenSlotParams& PGSParams, const FTransf
 	if(SpawnData.DecalTS.DecalMaterial != nullptr)
 		pDecalTypeSetup = &SpawnData.DecalTS;
 
+	FTransform TempTransformWithoutFlip = TempTransform;
+	FTransform TempTransformNew = TempTransform;
+
+	if (PGSParams.bRandomPitch180)
+	{
+		bool Add180ToPitch = UKismetMathLibrary::RandomBoolWithWeightFromStream(0.5f, PGSParams.CurrentGenerationStream);
+		if (Add180ToPitch)
+		{
+			FRotator AlignRotation = FVector(0, 0, -1).Rotation();
+			AlignRotation.Pitch -= 90.f;
+			AlignRotation.Pitch = FRotator::NormalizeAxis(AlignRotation.Pitch);
+			FQuat NormalizedQRot = TempTransform.GetRotation() * FQuat(AlignRotation);
+			NormalizedQRot.Normalize();
+			TempTransformNew.SetRotation(NormalizedQRot);
+		}
+	}
+
 	bool bObjectCreated = false;
 	if (PGSParams.bIsGridGenEnabled)
 	{
-		FGenerationGridCell* pGridCell = pProcGenManager->GetNearestGridCellToPointFast(TempTransform.GetLocation());
+		FGenerationGridCell* pGridCell = pProcGenManager->GetNearestGridCellToPointFast(TempTransformNew.GetLocation());
 		if (pGridCell)
 		{
 			FGenerationInCellSlotData NewSlotData = FGenerationInCellSlotData();
@@ -4217,7 +4307,7 @@ bool UPGSObj::GenerateObjectOnLevel(FProcGenSlotParams& PGSParams, const FTransf
 			if (pSelectedSMSetupTG)
 			{
 				NewSlotData.ParentActorPtr = pParentProcGenActor;
-				NewSlotData.SlotTransf = TempTransform;
+				NewSlotData.SlotTransf = TempTransformNew;
 				NewSlotData.CellSlotDataType = EGenCellSlotDataType::SMeshToGen;
 				NewSlotData.StaticMeshPtr = pSelectedSMSetupTG->StaticMeshPtr;
 				NewSlotData.ParentCellId = pGridCell->CellId;
@@ -4227,7 +4317,7 @@ bool UPGSObj::GenerateObjectOnLevel(FProcGenSlotParams& PGSParams, const FTransf
 			else if (pDecalTypeSetup)
 			{
 				NewSlotData.ParentActorPtr = pParentProcGenActor;
-				NewSlotData.SlotTransf = TempTransform;
+				NewSlotData.SlotTransf = TempTransformNew;
 				NewSlotData.CellSlotDataType = EGenCellSlotDataType::DecalToGen;
 				NewSlotData.DecalMaterial = pDecalTypeSetup->DecalMaterial;
 				NewSlotData.DecalSize = pDecalTypeSetup->DecalInitialScale;
@@ -4238,7 +4328,7 @@ bool UPGSObj::GenerateObjectOnLevel(FProcGenSlotParams& PGSParams, const FTransf
 			else if (pSelectedActorClass)
 			{
 				NewSlotData.ParentActorPtr = pParentProcGenActor;
-				NewSlotData.SlotTransf = TempTransform;
+				NewSlotData.SlotTransf = TempTransformNew;
 				NewSlotData.CellSlotDataType = EGenCellSlotDataType::ActorToGen;
 				NewSlotData.ActorToCreateClassPtr = pSelectedActorClass;
 				NewSlotData.ParentCellId = pGridCell->CellId;
@@ -4254,7 +4344,7 @@ bool UPGSObj::GenerateObjectOnLevel(FProcGenSlotParams& PGSParams, const FTransf
 		{
 			if (pParentProcGenActor)
 			{
-				CreationResults.CreatedMeshComponentPtr = pParentProcGenActor->CreateNewSMComponent(pSelectedSMSetupTG->StaticMeshPtr, TempTransform, &pSelectedSMSetupTG->StaticMeshCollisionSetup, &pSelectedSMSetupTG->StaticMeshRenderingOverrideSetup);
+				CreationResults.CreatedMeshComponentPtr = pParentProcGenActor->CreateNewSMComponent(pSelectedSMSetupTG->StaticMeshPtr, TempTransformNew, &pSelectedSMSetupTG->StaticMeshCollisionSetup, &pSelectedSMSetupTG->StaticMeshRenderingOverrideSetup);
 				bObjectCreated = true;
 			}
 		}
@@ -4263,20 +4353,20 @@ bool UPGSObj::GenerateObjectOnLevel(FProcGenSlotParams& PGSParams, const FTransf
 		{
 			if (pParentProcGenActor)
 			{
-				CreationResults.CreatedDecalComponentPtr = pParentProcGenActor->CreateNewDecalComponent(pDecalTypeSetup->DecalMaterial, TempTransform, pDecalTypeSetup->DecalInitialScale, &pDecalTypeSetup->DecalRenderingOverrideSetup);
+				CreationResults.CreatedDecalComponentPtr = pParentProcGenActor->CreateNewDecalComponent(pDecalTypeSetup->DecalMaterial, TempTransformNew, pDecalTypeSetup->DecalInitialScale, &pDecalTypeSetup->DecalRenderingOverrideSetup);
 				bObjectCreated = true;
 			}
 		}
 	}
 	
-	PGSParams.TempTransformsForObjects.Add(TempTransform);
+	PGSParams.TempTransformsForObjects.Add(TempTransformWithoutFlip);
 	if (PGSParams.bEnableGridBasedDistanceCheckOptimization)
 	{
-		FGenerationGridCell* pGridCell = pProcGenManager->GetNearestGridCellToPointFast(TempTransform.GetLocation());
+		FGenerationGridCell* pGridCell = pProcGenManager->GetNearestGridCellToPointFast(TempTransformNew.GetLocation());
 		if (pGridCell)
 		{
 			FGenerationGridCellGenSlot& CellGenSlot = pGridCell->CellSlotsInfo.FindOrAdd(PGSParams.SlotUniqueId);
-			CellGenSlot.TempTransformsForDistanceChecks.Add(TempTransform);
+			CellGenSlot.TempTransformsForDistanceChecks.Add(TempTransformWithoutFlip);
 		}
 	}
 
@@ -4294,7 +4384,7 @@ bool UPGSObj::GenerateObjectOnLevel(FProcGenSlotParams& PGSParams, const FTransf
 		{
 			FActorToDelayedCreateParams ActorToDelayedCreateParams = FActorToDelayedCreateParams();
 			ActorToDelayedCreateParams.ActorClassPtr = pSelectedActorClass;
-			ActorToDelayedCreateParams.ActorTransform = TempTransform;
+			ActorToDelayedCreateParams.ActorTransform = TempTransformNew;
 			ActorToDelayedCreateParams.bSpawnInEditor = bPlaceActorsInEditor;
 			ActorToDelayedCreateParams.ParentProcGenSlotObjPtr = this;
 			ActorToDelayedCreateParams.ParentProcGenSlotParamsPtr = &PGSParams;
@@ -4333,12 +4423,12 @@ bool UPGSObj::GenerateObjectOnLevel(FProcGenSlotParams& PGSParams, const FTransf
 		//SpawnInfo.bCreateActorPackage = true;
 		//SpawnInfo.ObjectFlags = InObjectFlags;
 
-		AActor* pGeneratedActor = pGenerationWorld->SpawnActor(pSelectedActorClass, &TempTransform, SpawnInfo);
+		AActor* pGeneratedActor = pGenerationWorld->SpawnActor(pSelectedActorClass, &TempTransformNew, SpawnInfo);
 		if (pGeneratedActor)
 		{
 			CreationResults.CreatedActorPtr = pGeneratedActor;
 
-			pGeneratedActor->SetActorScale3D(TempTransform.GetScale3D());
+			pGeneratedActor->SetActorScale3D(TempTransformNew.GetScale3D());
 
 			PGSParams.GeneratedActorsPtrs.Add(pGeneratedActor);
 
@@ -4353,12 +4443,12 @@ bool UPGSObj::GenerateObjectOnLevel(FProcGenSlotParams& PGSParams, const FTransf
 #if WITH_EDITOR
 	else if (GEditor)
 	{
-		AActor* pGeneratedActor = GEditor->AddActor(pGenerationWorld->GetCurrentLevel(), pSelectedActorClass, TempTransform, true);
+		AActor* pGeneratedActor = GEditor->AddActor(pGenerationWorld->GetCurrentLevel(), pSelectedActorClass, TempTransformNew, true);
 		if (pGeneratedActor)
 		{
 			CreationResults.CreatedActorPtr = pGeneratedActor;
 
-			pGeneratedActor->SetActorScale3D(TempTransform.GetScale3D());
+			pGeneratedActor->SetActorScale3D(TempTransformNew.GetScale3D());
 
 			PGSParams.GeneratedActorsPtrs.Add(pGeneratedActor);
 

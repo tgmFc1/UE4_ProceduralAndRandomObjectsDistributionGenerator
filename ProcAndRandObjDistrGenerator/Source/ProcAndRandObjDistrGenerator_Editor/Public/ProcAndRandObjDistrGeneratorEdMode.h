@@ -13,6 +13,8 @@ public:
 	FProcAndRandObjDistrGeneratorEdMode();
 	virtual ~FProcAndRandObjDistrGeneratorEdMode();
 
+	virtual bool LostFocus(FEditorViewportClient* ViewportClient, FViewport* Viewport) override;
+
 	// FEdMode interface
 	virtual void Enter() override;
 	virtual void Exit() override;

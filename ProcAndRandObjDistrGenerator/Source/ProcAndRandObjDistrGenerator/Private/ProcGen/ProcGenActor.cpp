@@ -1472,11 +1472,13 @@ UStaticMeshComponent* AProcGenActor::CreateNewSMComponent(UStaticMesh* pSM, cons
 				StaticMeshComponent->SetVisibility(true);
 				//StaticMeshComponent->SetWorldLocation(GetActorLocation());
 
-				HierarchicalInstancedStaticMeshComponent->AddInstance(SMTrasf);
+				//HierarchicalInstancedStaticMeshComponent->AddInstance(SMTrasf);
+				HierarchicalInstancedStaticMeshComponent->AddInstanceWorldSpace(SMTrasf);
 			}
 			else
 			{
-				HierarchicalInstancedStaticMeshComponent->AddInstance(SMTrasf);
+				//HierarchicalInstancedStaticMeshComponent->AddInstance(SMTrasf);
+				HierarchicalInstancedStaticMeshComponent->AddInstanceWorldSpace(SMTrasf);
 			}
 
 			pLastSMForHismPtr = pSM;

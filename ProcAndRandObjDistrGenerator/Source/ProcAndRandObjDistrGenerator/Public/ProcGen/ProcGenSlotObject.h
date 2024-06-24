@@ -424,6 +424,8 @@ struct FProcGenSlotParams
 		bDebugIsObjectsCreatingDisabled = false;
 		bIsGridGenEnabled = false;
 		bEnableGridBasedDistanceCheckOptimization = false;
+		bScaleAllParamsByInstScale = false;
+		bRandomPitch180 = false;
 	}
 /** Actors classes to generate actors, selected randomly from this array */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Params)
@@ -594,6 +596,10 @@ struct FProcGenSlotParams
 /** Use generation grid cells information for distance checks between already generated instances */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Params)
 	bool bEnableGridBasedDistanceCheckOptimization;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Params)
+	bool bScaleAllParamsByInstScale;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Params)
+	bool bRandomPitch180;
 	//UKismetMathLibrary::SetRandomStreamSeed
 	FRandomStream CurrentGenerationStream;
 

@@ -25,6 +25,11 @@ FProcAndRandObjDistrGeneratorEdMode::~FProcAndRandObjDistrGeneratorEdMode()
 
 }
 
+bool FProcAndRandObjDistrGeneratorEdMode::LostFocus(FEditorViewportClient* ViewportClient, FViewport* Viewport)
+{
+	return FEdMode::LostFocus(ViewportClient, Viewport);
+}
+
 void FProcAndRandObjDistrGeneratorEdMode::Enter()
 {
 	FEdMode::Enter();
@@ -96,7 +101,7 @@ void FProcAndRandObjDistrGeneratorEdMode::Tick(FEditorViewportClient* ViewportCl
 
 bool FProcAndRandObjDistrGeneratorEdMode::InputKey(FEditorViewportClient* InViewportClient, FViewport* InViewport, FKey InKey, EInputEvent InEvent)
 {
-	if(IsSelectionAllowed(nullptr, true))
+	if(IsSelectionAllowed(nullptr, true) && InEvent != IE_Released)
 		return FEdMode::InputKey(InViewportClient, InViewport, InKey, InEvent);
 
 	//if (!InKey.IsMouseButton())
