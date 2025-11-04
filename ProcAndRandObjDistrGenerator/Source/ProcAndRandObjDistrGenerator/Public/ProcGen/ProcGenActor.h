@@ -31,13 +31,17 @@ struct SProcessScopeExec
 	SProcessScopeExec(bool& variableL)
 	{
 		bVarPtr = &variableL;
-		bVarPtr = reinterpret_cast<bool*>(true);
+		variableL = true;
 	}
 
 	~SProcessScopeExec()
 	{
-		bVarPtr = reinterpret_cast<bool*>(false);
-		bVarPtr = nullptr;
+		if (bVarPtr)
+		{
+			bool& PtrLink = *bVarPtr;
+			PtrLink = false;
+			bVarPtr = nullptr;
+		}
 	}
 
 	//bool& bVarL;

@@ -395,9 +395,10 @@ void UProcGenManager::RequestPaint(bool bPaintOrClearBrush)
 		FCQP.bTraceComplex = true;
 		FCQP.bReturnPhysicalMaterial = true;
 
-		FCollisionResponseParams FCRP = FCollisionResponseParams(/*ECR_Overlap*/ECR_Block);
+		FCollisionResponseParams FCRP = FCollisionResponseParams(ECR_Overlap/*ECR_Block*/);
 		TArray<FHitResult> arrHits = TArray<FHitResult>();
 		bIsHit = pCurEdWorld->SweepMultiByChannel(arrHits, CurrentPaintPos, CurrentPaintPos + FVector(0, 0, 1), FQuat::Identity, CollisionChannel, sphereColl, FCQP, FCRP);
+		bIsHit = arrHits.Num() > 0;
 		if (bIsHit)
 		{
 			TArray<AActor*> ArrHitedActors = TArray<AActor*>();

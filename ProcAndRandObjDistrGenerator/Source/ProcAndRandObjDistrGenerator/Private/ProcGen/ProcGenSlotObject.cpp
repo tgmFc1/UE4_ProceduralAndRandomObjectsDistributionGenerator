@@ -162,7 +162,8 @@ void UPGSObj::RequestGenerateInBBox(const TArray<FVector>& GenerationBBoxPoints,
 				UClass* pSelectedActorClass = nullptr;
 				if (ProcGenSlot.ActorsTypesWithChanceToGenerate.Num() <= 0)
 				{
-					pSelectedActorClass = ProcGenSlot.ActorsTypesToGenerate[SelectedActorClassId];
+					if (ProcGenSlot.ActorsTypesToGenerate.Num() > SelectedActorClassId)
+						pSelectedActorClass = ProcGenSlot.ActorsTypesToGenerate[SelectedActorClassId];
 				}
 				else
 				{
@@ -509,9 +510,10 @@ struct GenerationHelper
 			FCQP.bTraceComplex = true;
 			FCQP.bReturnPhysicalMaterial = true;
 
-			FCollisionResponseParams FCRP = FCollisionResponseParams(/*ECR_Overlap*/ECR_Block);
+			FCollisionResponseParams FCRP = FCollisionResponseParams(ECR_Overlap/*ECR_Block*/);
 			TArray<FHitResult> arrHits = TArray<FHitResult>();
 			bIsHit = pGenWorld->SweepMultiByChannel(arrHits, ObjectTransf.GetLocation(), ObjectTransf.GetLocation() + FVector(0, 0, 1), FQuat::Identity, CollisionChannel, sphereColl, FCQP, FCRP);
+			bIsHit = arrHits.Num() > 0;
 			if (bIsHit)
 			{
 				TArray<AActor*> ArrHitedActors = TArray<AActor*>();
@@ -1054,11 +1056,14 @@ void UPGSObj::RequestGenerateInBBoxWithShapeBorder(const TArray<FVector>& Genera
 					}
 					else
 					{
+						FCollisionResponseParams FCRPX = FCollisionResponseParams(ECR_Overlap/*ECR_Block*/);
 						TArray<FHitResult> HitsRes = TArray<FHitResult>();
-						bIsHit = pGenerationWorld->LineTraceMultiByChannel(HitsRes, TempPoint, PointEnd, CollisionChannel, TraceParams);
+						bIsHit = pGenerationWorld->LineTraceMultiByChannel(HitsRes, TempPoint, PointEnd, CollisionChannel, TraceParams, FCRPX);
+						bIsHit = HitsRes.Num() > 0;
 						if (!bIsHit && ProcGenSlot.UnderTerrainFixGeneration)
 						{
-							bIsHit = pGenerationWorld->LineTraceMultiByChannel(HitsRes, TempPoint, PointEnd2, CollisionChannel, TraceParams);
+							bIsHit = pGenerationWorld->LineTraceMultiByChannel(HitsRes, TempPoint, PointEnd2, CollisionChannel, TraceParams, FCRPX);
+							bIsHit = HitsRes.Num() > 0;
 						}
 						if (bIsHit)
 						{
@@ -1282,7 +1287,8 @@ void UPGSObj::RequestGenerateInBBoxWithShapeBorder(const TArray<FVector>& Genera
 
 					if (ProcGenSlot.ActorsTypesWithChanceToGenerate.Num() <= 0)
 					{
-						pSelectedActorClass = ProcGenSlot.ActorsTypesToGenerate[SelectedActorClassId];
+						if (ProcGenSlot.ActorsTypesToGenerate.Num() > SelectedActorClassId)
+							pSelectedActorClass = ProcGenSlot.ActorsTypesToGenerate[SelectedActorClassId];
 					}
 					else
 					{
@@ -2453,11 +2459,14 @@ FExtendedSlopeCheckFunctionOutParams UPGSObj::DoExtendedSlopeCheck(const FExtend
 		}
 		else
 		{
+			FCollisionResponseParams FCRPX = FCollisionResponseParams(ECR_Overlap/*ECR_Block*/);
 			TArray<FHitResult> HitsRes = TArray<FHitResult>();
-			bIsHit = pGenWorld->LineTraceMultiByChannel(HitsRes, PointStart, PointEnd, CollisionChannel, TraceParams);
+			bIsHit = pGenWorld->LineTraceMultiByChannel(HitsRes, PointStart, PointEnd, CollisionChannel, TraceParams, FCRPX);
+			bIsHit = HitsRes.Num() > 0;
 			if (!bIsHit && PGSParams.UnderTerrainFixGeneration)
 			{
-				bIsHit = pGenWorld->LineTraceMultiByChannel(HitsRes, PointStart, PointEnd2, CollisionChannel, TraceParams);
+				bIsHit = pGenWorld->LineTraceMultiByChannel(HitsRes, PointStart, PointEnd2, CollisionChannel, TraceParams, FCRPX);
+				bIsHit = HitsRes.Num() > 0;
 			}
 			if (bIsHit)
 			{
@@ -3026,11 +3035,14 @@ TArray<FGenerationHandledPointData> UPGSObj::HandlingProcessOfGenerationPoints(c
 			}
 			else
 			{
+				FCollisionResponseParams FCRPX = FCollisionResponseParams(ECR_Overlap/*ECR_Block*/);
 				TArray<FHitResult> HitsRes = TArray<FHitResult>();
-				bIsHit = pGenerationWorld->LineTraceMultiByChannel(HitsRes, TempPoint, PointEnd, CollisionChannel, TraceParams);
+				bIsHit = pGenerationWorld->LineTraceMultiByChannel(HitsRes, TempPoint, PointEnd, CollisionChannel, TraceParams, FCRPX);
+				bIsHit = HitsRes.Num() > 0;
 				if (!bIsHit && PGSParams.UnderTerrainFixGeneration)
 				{
-					bIsHit = pGenerationWorld->LineTraceMultiByChannel(HitsRes, TempPoint, PointEnd2, CollisionChannel, TraceParams);
+					bIsHit = pGenerationWorld->LineTraceMultiByChannel(HitsRes, TempPoint, PointEnd2, CollisionChannel, TraceParams, FCRPX);
+					bIsHit = HitsRes.Num() > 0;
 				}
 				if (bIsHit)
 				{
@@ -3283,7 +3295,8 @@ FGenerationObjectToSpawnData UPGSObj::PrepareObjectToGenerateOnPoint(const FGene
 
 		if (PGSParams.ActorsTypesWithChanceToGenerate.Num() <= 0)
 		{
-			pSelectedActorClass = PGSParams.ActorsTypesToGenerate[SelectedActorClassId];
+			if (PGSParams.ActorsTypesToGenerate.Num() > SelectedActorClassId)
+				pSelectedActorClass = PGSParams.ActorsTypesToGenerate[SelectedActorClassId];
 		}
 		else
 		{
