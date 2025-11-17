@@ -139,6 +139,9 @@ public:
 	UFUNCTION(BlueprintCallable, CallInEditor, Category = Clearing)
 	void ClearingProcGenActorsInRangeRequest();
 
+	UFUNCTION(BlueprintCallable, CallInEditor, Category = Generation)
+	void MakeSplineShapeFromNearestLanscapeSplinePt();
+
 	void GenerateOnTargetLandscape();
 
 	UFUNCTION()

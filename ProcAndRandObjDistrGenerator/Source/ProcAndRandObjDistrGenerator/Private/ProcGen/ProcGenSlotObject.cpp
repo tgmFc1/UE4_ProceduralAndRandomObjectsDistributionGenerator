@@ -7,7 +7,11 @@
 #include "Editor.h"
 #endif
 #include "Engine/StaticMeshActor.h"
+
 #include "Landscape.h"
+#include "LandscapeComponent.h"
+#include "LandscapeHeightfieldCollisionComponent.h"
+
 #include "ProcAndRandObjDistrGenerator.h"
 #include "Engine/Polys.h"
 #include "Engine/World.h"
@@ -15,6 +19,7 @@
 //#include "..\..\Public\ProcGen\ProcGenSlotObject.h"
 #include "..\..\Public\ProcGen\ProcGenManager.h"
 #include "ProcGen/ProcGenActor.h"
+#include "ProcGen/ProcGenParamsModifierActor.h"
 #include "Components/DecalComponent.h"
 #include "Materials/MaterialInterface.h"
 #include "Misc/ScopedSlowTask.h"
@@ -103,6 +108,7 @@ void UPGSObj::RequestGenerateInBBox(const TArray<FVector>& GenerationBBoxPoints,
 			{
 				TempPoint = RandomPointInBoxByGenSlotParams(ProcGenSlot, GenBox);
 				FCollisionQueryParams TraceParams(FName(TEXT("CheckTrace")), true);
+				TraceParams.bReturnPhysicalMaterial = true;
 				FHitResult CheckHit = FHitResult(ForceInit);
 				bool bIsHit = false;
 				if (!ProcGenSlot.FloatingInAirGeneration)
@@ -606,6 +612,7 @@ struct GenerationHelper
 			ResizeFByScale3D(ObjectTransf.GetScale3D(), ObjectHeight);
 
 			FCollisionQueryParams TraceParams(FName(TEXT("CheckTrace")), true);
+			TraceParams.bReturnPhysicalMaterial = true;
 			FHitResult CheckHit = FHitResult(ForceInit);
 			bool bIsHit = false;
 			FVector PointEnd = ObjectTransf.GetLocation() + ((ObjectTransf.GetRotation() * FVector(0, 0, 1)) * ObjectHeight);
@@ -969,6 +976,7 @@ void UPGSObj::RequestGenerateInBBoxWithShapeBorder(const TArray<FVector>& Genera
 				//UKismetSystemLibrary::DrawDebugLine(pGenerationWorld, TempPoint, FVector(TempPoint.X, TempPoint.Y, -65535.0f), FLinearColor::Red, 15.3f);
 
 				FCollisionQueryParams TraceParams(FName(TEXT("CheckTrace")), true);
+				TraceParams.bReturnPhysicalMaterial = true;
 				if (pParentProcGenActor && !pParentProcGenActor->bSelfCollideWhenGeneration)
 				{
 					TraceParams.AddIgnoredActor(pParentProcGenActor);
@@ -1189,6 +1197,28 @@ void UPGSObj::RequestGenerateInBBoxWithShapeBorder(const TArray<FVector>& Genera
 						if (!ProcGenSlot.SurfaceTypesAllowed.Contains(HitedSurfaceType))
 						{
 							continue;
+						}
+					}
+				}
+
+				if (!ProcGenSlot.FloatingInAirGeneration && bIsHit && (ProcGenSlot.TerrainLayersAllowed.Num() > 0))
+				{
+					ULandscapeHeightfieldCollisionComponent* pHitLandscapeCollision = Cast<ULandscapeHeightfieldCollisionComponent>(CheckHit.GetComponent());
+					if (pHitLandscapeCollision)
+					{
+						ULandscapeComponent* pLComp = Cast<ULandscapeComponent>(pHitLandscapeCollision->RenderComponent.Get());
+						if (pLComp)
+						{
+							float fWeightComplete = 0.0f;
+							for (FString& LayersAllowedStr : ProcGenSlot.TerrainLayersAllowed)
+							{
+								fWeightComplete += pLComp->EditorGetPaintLayerWeightByNameAtLocation(CheckHit.ImpactPoint, *LayersAllowedStr);
+							}
+
+							if (fWeightComplete < ProcGenSlot.MinimalTerrainLayerWeightToGenerate)
+							{
+								continue;
+							}
 						}
 					}
 				}
@@ -2367,6 +2397,7 @@ FExtendedSlopeCheckFunctionOutParams UPGSObj::DoExtendedSlopeCheck(const FExtend
 	FVector HitLocations[4] = { FVector::ZeroVector,FVector::ZeroVector,FVector::ZeroVector,FVector::ZeroVector };
 
 	FCollisionQueryParams TraceParams(FName(TEXT("CheckTrace")), true);
+	TraceParams.bReturnPhysicalMaterial = true;
 	if (InParams.ParentProcGenActorPtr && !InParams.ParentProcGenActorPtr->bSelfCollideWhenGeneration)
 	{
 		TraceParams.AddIgnoredActor(InParams.ParentProcGenActorPtr);
@@ -2925,6 +2956,7 @@ TArray<FGenerationHandledPointData> UPGSObj::HandlingProcessOfGenerationPoints(c
 
 	TArray<FGenerationHandledPointData> HandledPointsData = TArray<FGenerationHandledPointData>();
 	FCollisionQueryParams TraceParams(FName(TEXT("CheckTrace")), true);
+	TraceParams.bReturnPhysicalMaterial = true;
 	if (pParentProcGenActor && !pParentProcGenActor->bSelfCollideWhenGeneration)
 	{
 		TraceParams.AddIgnoredActor(pParentProcGenActor);
@@ -3168,6 +3200,28 @@ TArray<FGenerationHandledPointData> UPGSObj::HandlingProcessOfGenerationPoints(c
 				if (!PGSParams.SurfaceTypesAllowed.Contains(HitedSurfaceType))
 				{
 					continue;
+				}
+			}
+		}
+
+		if (!PGSParams.FloatingInAirGeneration && bIsHit && (PGSParams.TerrainLayersAllowed.Num() > 0))
+		{
+			ULandscapeHeightfieldCollisionComponent* pHitLandscapeCollision = Cast<ULandscapeHeightfieldCollisionComponent>(CheckHit.GetComponent());
+			if (pHitLandscapeCollision)
+			{
+				ULandscapeComponent* pLComp = Cast<ULandscapeComponent>(pHitLandscapeCollision->RenderComponent.Get());
+				if (pLComp)
+				{
+					float fWeightComplete = 0.0f;
+					for (FString& LayersAllowedStr : PGSParams.TerrainLayersAllowed)
+					{
+						fWeightComplete += pLComp->EditorGetPaintLayerWeightByNameAtLocation(CheckHit.ImpactPoint, *LayersAllowedStr);
+					}
+
+					if (fWeightComplete < PGSParams.MinimalTerrainLayerWeightToGenerate)
+					{
+						continue;
+					}
 				}
 			}
 		}

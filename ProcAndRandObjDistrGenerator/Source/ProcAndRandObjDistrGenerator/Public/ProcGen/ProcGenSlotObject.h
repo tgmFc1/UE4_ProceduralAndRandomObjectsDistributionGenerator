@@ -426,6 +426,7 @@ struct FProcGenSlotParams
 		bEnableGridBasedDistanceCheckOptimization = false;
 		bScaleAllParamsByInstScale = false;
 		bRandomPitch180 = false;
+		MinimalTerrainLayerWeightToGenerate = 0.55f;
 	}
 /** Actors classes to generate actors, selected randomly from this array */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Params)
@@ -503,10 +504,10 @@ struct FProcGenSlotParams
 /** Extended surface slope check and generation parameters */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Params)
 	FExtendedSlopeCheckSetupParams ExtendedSlopeCheckSetupParams;
-/** At now ignored */
+/** Names of lanscape layers are allowed to create object on surface (Works only in editor)*/
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Params)
 	TArray<FString> TerrainLayersAllowed;
-/** Ids of surface types are allowed to create object on surface */
+/** Ids of surface types are allowed to create object on surface (can work inconsistently with landscape in editor without runned PIE session(runtime)) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Params)
 	TArray<uint8> SurfaceTypesAllowed;
 /** Actors tags names for generation only on actors with this tags surfaces */
@@ -600,6 +601,8 @@ struct FProcGenSlotParams
 	bool bScaleAllParamsByInstScale;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Params)
 	bool bRandomPitch180;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Params)
+	float MinimalTerrainLayerWeightToGenerate;
 	//UKismetMathLibrary::SetRandomStreamSeed
 	FRandomStream CurrentGenerationStream;
 

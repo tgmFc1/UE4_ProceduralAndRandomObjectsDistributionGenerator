@@ -2,17 +2,28 @@
 
 
 #include "ProcGen/ProcGenActor.h"
-#include "Runtime/Engine/Classes/Components/SplineComponent.h"
+#include "Components/SplineComponent.h"
 #include "..\..\Public\ProcGen\ProcGenActor.h"
 #include "Engine/Polys.h"
 #include "Engine.h"
 //#include "Editor.h"
 #include "Engine/StaticMesh.h"
 #include "Components/StaticMeshComponent.h"
-#include "Runtime/Landscape/Classes/Landscape.h"
-#include "Runtime/Landscape/Classes/LandscapeInfo.h"
-#include "Runtime/Landscape/Classes/LandscapeComponent.h"
-#include "Runtime/Landscape/Public/LandscapeEdit.h"
+#include "Landscape.h"
+#include "LandscapeInfo.h"
+#include "LandscapeComponent.h"
+#include "LandscapeEdit.h"
+#include "LandscapeSplinesComponent.h"
+
+#if WITH_EDITOR
+#include "LandscapeSplineControlPoint.h"
+#include "LandscapeSplineSegment.h"
+#include "LandscapeStreamingProxy.h"
+#include "LandscapeProxy.h"
+#endif
+
+#include "Components/SplineMeshComponent.h"
+#include "ControlPointMeshComponent.h"
 #include "ProcGen/ProcGenManager.h"
 #include "Components/DecalComponent.h"
 #include "Materials/MaterialInterface.h"
@@ -1198,6 +1209,108 @@ void AProcGenActor::ClearingProcGenActorsInRangeRequest()
 			}
 		}
 	}
+}
+
+void AProcGenActor::MakeSplineShapeFromNearestLanscapeSplinePt()
+{
+#if WITH_EDITOR
+	if (!TargetLandscapePtr || !GenerationSplineShape)
+		return;
+		
+	int numPointsX = 0;
+	ULandscapeSplineControlPoint* pLSCP = nullptr;
+	ULandscapeSplineControlPoint* pLSCPFinal = nullptr;
+	TArray<ULandscapeSplineControlPoint*> AllSplinesCPt = TArray<ULandscapeSplineControlPoint*>();
+	float distXv = 1000000000.0f;
+	for (TObjectIterator<ULandscapeSplineControlPoint> Itr; Itr; ++Itr)
+	{
+		pLSCP = *Itr;
+		++numPointsX;
+		if (pLSCP)
+		{
+			AllSplinesCPt.Add(pLSCP);
+
+			FVector XPos = TargetLandscapePtr->GetActorLocation() + pLSCP->Location;
+			float DistX = FVector::Dist2D(XPos, GetActorLocation());
+			if (DistX < distXv)
+			{
+				distXv = DistX;
+				pLSCPFinal = pLSCP;
+			}
+		}
+	}
+
+	TArray<ULandscapeSplineSegment*> AllSplinesSegments = TArray<ULandscapeSplineSegment*>();
+
+	for (TObjectIterator<ULandscapeSplineSegment> Itr; Itr; ++Itr)
+	{
+		ULandscapeSplineSegment* pLSS = *Itr;
+		
+		if (pLSS)
+		{	
+			AllSplinesSegments.Add(pLSS);
+		}
+	}
+
+		if (pLSCPFinal)
+		{
+			TArray<ULandscapeSplineControlPoint*> ArrSplineUsedControlPoints = TArray<ULandscapeSplineControlPoint*>();
+			struct SSplineCPHelpers
+			{
+				static void IterateSpline2(ULandscapeSplineControlPoint* NvPoint, TArray<ULandscapeSplineControlPoint*>& ArrPointsCollection, TArray<ULandscapeSplineSegment*>& SplinesSegments)
+				{
+					ULandscapeSplineControlPoint* NvPointNext = nullptr;
+					for (ULandscapeSplineSegment* SplineSeg : SplinesSegments)
+					{
+						if (SplineSeg->Connections[0].ControlPoint == NvPoint && SplineSeg->Connections[1].ControlPoint)
+						{
+							if (!ArrPointsCollection.Contains(SplineSeg->Connections[1].ControlPoint))
+							{
+								ArrPointsCollection.Add(SplineSeg->Connections[1].ControlPoint);
+								IterateSpline2(SplineSeg->Connections[1].ControlPoint, ArrPointsCollection, SplinesSegments);
+								break;
+							}
+						}
+						else if (SplineSeg->Connections[1].ControlPoint == NvPoint && SplineSeg->Connections[0].ControlPoint)
+						{
+							if (!ArrPointsCollection.Contains(SplineSeg->Connections[0].ControlPoint))
+							{
+								ArrPointsCollection.Add(SplineSeg->Connections[0].ControlPoint);
+								IterateSpline2(SplineSeg->Connections[0].ControlPoint, ArrPointsCollection, SplinesSegments);
+								break;
+							}
+						}
+					}
+				}
+			};
+			ArrSplineUsedControlPoints.Add(pLSCPFinal);
+			SSplineCPHelpers::IterateSpline2(pLSCPFinal, ArrSplineUsedControlPoints, AllSplinesSegments);
+			bool bCanReconstructSplineShape = false;
+			if (ArrSplineUsedControlPoints.Num() > 1)
+			{
+				bCanReconstructSplineShape = true;
+				GenerationSplineShape->ClearSplinePoints(true);
+			}
+
+			for (ULandscapeSplineControlPoint* pSpCPt : ArrSplineUsedControlPoints)
+			{
+				if (pSpCPt)
+				{
+					FVector XPos = TargetLandscapePtr->GetActorLocation() + pSpCPt->Location;
+
+					if (bCanReconstructSplineShape)
+					{
+						GenerationSplineShape->AddSplinePoint(XPos, ESplineCoordinateSpace::World, false);
+					}
+				}
+			}
+
+			if (bCanReconstructSplineShape)
+			{
+				GenerationSplineShape->UpdateSpline();
+			}
+		}
+#endif
 }
 
 void AProcGenActor::GenerateOnTargetLandscape()
